@@ -191,16 +191,31 @@ const deleteboxfunction = (request, response) => {
 const gettransactions = async (request, response) => {
   let fromid = parseInt(request.query.from);
   let toid = parseInt(request.query.to);
+  let start = request.query.start;
+  let end = request.query.end;
+  var enddate = new Date();
+  var startdate = new Date();
+  startdate.setDate(enddate.getDate() - 100);;
+
+  if (start !== undefined) {
+    startdate = new Date(start);
+  }
+  if (end !== undefined) {
+    enddate = new Date(end);
+  }
+
+  console.log("Start", startdate)
+  console.log("End", enddate)
   if (!isNaN(fromid) && isNaN(toid)) {
 
     pool.query(
       `
-    SELECT * FROM box_transactions WHERE frombox = $1 ORDER BY id
+    SELECT * FROM box_transactions WHERE frombox = $1 AND date >= $2 AND date <= $3 ORDER BY id
    
-    `, [fromid], (error, results) => {
+    `, [fromid, start, enddate], (error, results) => {
       if (error) {
         console.log(error);
-        response.status(404).send(`Get box error.`);
+        response.status(404).send(`Get transaction error.`);
       }
       response.status(200).json(results.rows);
     });
@@ -209,12 +224,12 @@ const gettransactions = async (request, response) => {
 
     pool.query(
       `
-    SELECT * FROM box_transactions WHERE tobox = $1 ORDER BY id
+    SELECT * FROM box_transactions WHERE tobox = $1 AND date >= $2 AND date <= $3 ORDER BY id
    
-    `, [toid], (error, results) => {
+    `, [toid, start, enddate], (error, results) => {
       if (error) {
         console.log(error);
-        response.status(404).send(`Get box error.`);
+        response.status(404).send(`Get transaction error.`);
       }
       response.status(200).json(results.rows);
     });
@@ -222,12 +237,12 @@ const gettransactions = async (request, response) => {
   else if (!isNaN(fromid) && !isNaN(toid)) {
     pool.query(
       `
-    SELECT * FROM box_transactions WHERE frombox = $1 AND tobox = $2 ORDER BY id
+    SELECT * FROM box_transactions WHERE frombox = $1 AND tobox = $2 AND date >= $3 AND date <= $4 ORDER BY id
    
-    `, [fromid, toid], (error, results) => {
+    `, [fromid, toid, start, enddate], (error, results) => {
       if (error) {
         console.log(error);
-        response.status(404).send(`Get box error.`);
+        response.status(404).send(`Get transaction error.`);
       }
       response.status(200).json(results.rows);
     });
@@ -236,12 +251,12 @@ const gettransactions = async (request, response) => {
 
     pool.query(
       `
-    SELECT * FROM box_transactions ORDER BY id
+    SELECT * FROM box_transactions WHERE date >= $1 AND date <= $2 ORDER BY id
    
-    `, (error, results) => {
+    `, [start, enddate], (error, results) => {
       if (error) {
         console.log(error);
-        response.status(404).send(`Get box error.`);
+        response.status(404).send(`Get transaction error.`);
       }
       response.status(200).json(results.rows);
     });
@@ -303,7 +318,7 @@ const getIncomeReport = async (request, response) => {
     `WITH cte AS ( SELECT date_trunc('month', DATE) AS month ,coalesce(sum(amount), 0) AS income FROM box_transactions WHERE tobox = $1 GROUP BY month ORDER BY month ) ,
     cte2 AS ( SELECT date_trunc('month', DATE) AS month ,coalesce(sum(amount), 0) AS expense FROM box_transactions WHERE frombox = $1 GROUP BY month ORDER BY month ) ,
     cte3 AS ( SELECT coalesce(cte.month, cte2.month) AS month ,coalesce(cte.income, 0) AS income ,coalesce(cte2.expense, 0) AS expense FROM cte FULL JOIN cte2 ON cte.month = cte2.month ORDER BY month ) 
-    SELECT * ,(cte3.income-cte3.expense) as dept, sum(cte3.income-cte3.expense) OVER ( ORDER BY month ) total_dept  FROM cte3 ORDER BY month`,
+    SELECT * ,(cte3.income-cte3.expense) as balance, sum(cte3.income-cte3.expense) OVER ( ORDER BY month ) total_balance  FROM cte3 ORDER BY month`,
     [id],
     (error, results) => {
       if (error) {
@@ -335,6 +350,26 @@ const getCreditCardReport = async (request, response) => {
     }
   );
 };
+const getAllCreditCardReport = async (request, response) => {
+
+
+  pool.query(
+    `WITH cte AS ( SELECT date_trunc('month', DATE) AS month ,coalesce(sum(amount), 0.00) AS income FROM box_transactions WHERE tobox IN (SELECT ID FROM boxes where boxtypeid = 2) GROUP BY month ORDER BY month ) ,
+     cte2 AS ( SELECT date_trunc('month', DATE) AS month ,coalesce(sum(amount), 0.00) AS expense FROM box_transactions WHERE frombox IN (SELECT ID FROM boxes where boxtypeid = 2) GROUP BY month ORDER BY month ) ,
+     cte3 AS ( SELECT coalesce(cte.month, cte2.month) AS month ,coalesce(cte.income, 0.00) AS income ,coalesce(cte2.expense, 0.00) AS expense FROM cte FULL JOIN cte2 ON cte.month = cte2.month ORDER BY month ), 
+     cte4 AS ( SELECT *,coalesce(LAG(expense ,1) OVER (ORDER BY month),0.00) pre_expense  from cte3),
+     cte5 AS ( SELECT *, (cte4.income - cte4.pre_expense) as dept, sum(cte4.income-cte4.pre_expense) OVER ( ORDER BY month ) total_dept FROM cte4 ORDER BY month)
+     SELECT month,income,expense,dept,total_dept from cte5`,
+
+    (error, results) => {
+      if (error) {
+        console.log(error);
+        response.status(400).send(`Income report error.`);
+      }
+      response.status(200).json(results.rows);
+    }
+  );
+};
 
 const getExpenseReport = async (request, response) => {
   const id = parseInt(request.params.id);
@@ -345,6 +380,158 @@ const getExpenseReport = async (request, response) => {
     cte3 AS ( SELECT coalesce(cte.month, cte2.month) AS month ,coalesce(cte.income, 0) AS income ,coalesce(cte2.planned, 0) AS planned FROM cte FULL JOIN cte2 ON cte.month = cte2.month ORDER BY month ) 
     SELECT * ,(cte3.income-cte3.planned) as dept, sum(cte3.income-cte3.planned) OVER ( ORDER BY month ) total_dept  FROM cte3 ORDER BY month`,
     [id],
+    (error, results) => {
+      if (error) {
+        console.log(error);
+        response.status(400).send(`Income report error.`);
+      }
+      response.status(200).json(results.rows);
+    }
+  );
+};
+
+const getAllExpenseReport = async (request, response) => {
+  const id = parseInt(request.params.id);
+
+  pool.query(
+    `WITH cte AS ( SELECT date_trunc('month', DATE) AS month ,coalesce(sum(amount), 0) AS income FROM box_transactions WHERE tobox IN (SELECT ID FROM boxes where boxtypeid = 3) GROUP BY month ORDER BY month ) ,
+    cte2 AS ( SELECT date_trunc('month', DATE) AS month ,coalesce(sum(amount), 0) AS planned FROM box_transactions WHERE frombox IN (SELECT ID FROM boxes where boxtypeid = 3) GROUP BY month ORDER BY month ) ,
+    cte3 AS ( SELECT coalesce(cte.month, cte2.month) AS month ,coalesce(cte.income, 0) AS income ,coalesce(cte2.planned, 0) AS planned FROM cte FULL JOIN cte2 ON cte.month = cte2.month ORDER BY month ) 
+    SELECT * ,(cte3.income-cte3.planned) as dept, sum(cte3.income-cte3.planned) OVER ( ORDER BY month ) total_dept  FROM cte3 ORDER BY month`,
+
+    (error, results) => {
+      if (error) {
+        console.log(error);
+        response.status(400).send(`Income report error.`);
+      }
+      response.status(200).json(results.rows);
+    }
+  );
+};
+
+const getSummaries = async (request, response) => {
+
+
+  pool.query(
+    `WITH incomes
+AS (
+	SELECT date_trunc('month', DATE) AS month
+		,coalesce(sum(amount), 0.00) AS income
+	FROM box_transactions
+	WHERE tobox = 9
+	GROUP BY month
+	ORDER BY month
+	)
+	,ccincomes
+AS (
+	SELECT date_trunc('month', DATE) AS month
+		,coalesce(sum(amount), 0.00) AS cc_income
+	FROM box_transactions
+	WHERE tobox IN (
+			SELECT ID
+			FROM boxes
+			WHERE boxtypeid = 2
+			)
+	GROUP BY month
+	ORDER BY month
+	)
+	,ccexpenses
+AS (
+	SELECT date_trunc('month', DATE) AS month
+		,coalesce(sum(amount), 0.00) AS cc_expense
+	FROM box_transactions
+	WHERE frombox IN (
+			SELECT ID
+			FROM boxes
+			WHERE boxtypeid = 2
+			)
+	GROUP BY month
+	ORDER BY month
+	)
+	,oincomes
+AS (
+	SELECT date_trunc('month', DATE) AS month
+		,coalesce(sum(amount), 0.00) AS o_income
+	FROM box_transactions
+	WHERE tobox IN (
+			SELECT ID
+			FROM boxes
+			WHERE boxtypeid = 3
+			)
+		AND frombox = 9
+	GROUP BY month
+	ORDER BY month
+	)
+	,oexpenses
+AS (
+	SELECT date_trunc('month', DATE) AS month
+		,coalesce(sum(amount), 0.00) AS o_expense
+	FROM box_transactions
+	WHERE frombox IN (
+			SELECT ID
+			FROM boxes
+			WHERE boxtypeid = 3
+			)
+	GROUP BY month
+	ORDER BY month
+	)
+	,totalcc
+AS (
+	SELECT coalesce(ccincomes.month, ccexpenses.month) AS month
+		,cc_income
+		,cc_expense
+	FROM ccincomes
+	FULL JOIN ccexpenses ON ccincomes.month = ccexpenses.month
+	ORDER BY month
+	)
+	,totalo
+AS (
+	SELECT coalesce(oincomes.month, oexpenses.month) AS month
+		,o_income
+		,o_expense
+	FROM oincomes
+	FULL JOIN oexpenses ON oincomes.month = oexpenses.month
+	ORDER BY month
+	)
+	,totalcco
+AS (
+	SELECT coalesce(totalcc.month, totalo.month) AS month
+		,cc_income
+		,cc_expense
+		,o_income
+		,o_expense
+	FROM totalcc
+	FULL JOIN totalo ON totalcc.month = totalo.month
+	ORDER BY month
+	)
+	,total
+AS (
+	SELECT coalesce(totalcco.month, incomes.month) AS month
+		,coalesce(income, 0.00) AS income
+		,coalesce(cc_income, 0.00) AS cc_income
+		,coalesce(cc_expense, 0.00) AS cc_expense
+		,coalesce(o_income, 0.00) AS o_income
+		,coalesce(o_expense, 0.00) AS o_expense
+	FROM totalcco
+	FULL JOIN incomes ON totalcco.month = incomes.month
+	ORDER BY month
+	)
+	,totallag
+AS (
+	SELECT *
+		,coalesce(LAG(cc_expense, 1) OVER (
+				ORDER BY month
+				), 0.00) pre_expense
+	FROM total
+	)
+SELECT month
+	,income AS t_income
+	,pre_expense AS t_creditcard_expense
+	,o_income AS t_direct_expense
+	,(pre_expense + o_income ) AS t_expense
+	,(income - (pre_expense + o_income )) AS balance
+FROM totallag`,
+
     (error, results) => {
       if (error) {
         console.log(error);
@@ -376,5 +563,9 @@ module.exports = {
   deletetransaction,
   getIncomeReport,
   getCreditCardReport,
-  getExpenseReport
+  getAllCreditCardReport,
+  getExpenseReport,
+  getAllExpenseReport,
+  getSummaries
 };
+

@@ -28,6 +28,52 @@
           emit-value
           @update:model-value="getTransactionsData()"
         />
+
+        <q-input
+          class="q-ml-sm"
+          dense
+          filled
+          v-model="startdate"
+          mask="date"
+          :rules="['date']"
+          @update:model-value="getTransactionsData()"
+        >
+          <template v-slot:append>
+            <q-icon name="event" class="cursor-pointer">
+              <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                <q-date v-model="startdate" @update:model-value="getTransactionsData()">
+                  <div class="row items-center justify-end">
+                    <q-btn v-close-popup label="Close" color="primary" flat />
+                  </div>
+                </q-date>
+              </q-popup-proxy>
+            </q-icon>
+          </template>
+        </q-input>
+
+        <q-input
+          class="q-ml-sm"
+          dense
+          filled
+          v-model="enddate"
+          mask="date"
+          :rules="['date']"
+          @update:model-value="getTransactionsData()"
+        >
+          <template v-slot:append>
+            <q-icon name="event" class="cursor-pointer">
+              <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                <q-date v-model="enddate" @update:model-value="getTransactionsData()">
+                  <div class="row items-center justify-end">
+                    <q-btn v-close-popup label="Close" color="primary" flat />
+                  </div>
+                </q-date>
+              </q-popup-proxy>
+            </q-icon>
+          </template>
+        </q-input>
+
+        <q-btn dense flat class="q-pl-sm" @click="addColumn" color="primary">Add Column</q-btn>
       </div>
 
       <q-separator />
@@ -51,6 +97,15 @@
           </q-input>
         </template>
       </q-table>
+      <div class="row">
+        <div class="text-subtitle1 text-weight-bold q-ml-sm">Total:</div>
+        <div class="text-subtitle1 q-ml-sm">
+          {{totalamount.toLocaleString("tr-TR", {
+          style: "currency",
+          currency: "TRY",
+          })}}
+        </div>
+      </div>
       <q-separator />
       <q-btn
         flat
@@ -196,7 +251,7 @@ const show_dialog = ref(false);
 const show_add_dialog = ref(false);
 const filter = ref("");
 const options = ref({ mode: "code" });
-const columns = [
+const columns = ref([
   {
     name: "date",
     align: "center",
@@ -234,6 +289,11 @@ const columns = [
     label: "Amount",
     field: "amount",
     sortable: true,
+    format: (val) =>
+      parseFloat(val).toLocaleString("tr-TR", {
+        style: "currency",
+        currency: "TRY",
+      }),
   },
   {
     name: "installments",
@@ -243,15 +303,23 @@ const columns = [
     sortable: true,
     format: (val) => parseInfo(val, "Installments"),
   },
-];
+]);
 const initialPagination = ref({
   rowsPerPage: 100,
   // rowsNumber: xx if getting data from a server
 });
 
+const start = date.subtractFromDate(new Date(), {
+  days: new Date().getDate() - 1,
+});
+const enddate = ref(
+  date.formatDate(date.addToDate(start, { months: 1, days: -1 }))
+);
+const startdate = ref(date.formatDate(start));
 const fromboxfilter = ref({});
 const toboxfilter = ref({});
 const transactionsdata = ref([]);
+const totalamount = ref(0);
 function getTransactionsData() {
   var queryparams = new URLSearchParams();
 
@@ -261,12 +329,18 @@ function getTransactionsData() {
   if (toboxfilter.value !== -1) {
     queryparams.append("to", toboxfilter.value);
   }
+  queryparams.append("start", startdate.value);
+  queryparams.append("end", enddate.value);
 
   transactionsdata.value = [];
   api
     .get("/transactions", { params: queryparams })
     .then((response) => {
       transactionsdata.value = response.data;
+      totalamount.value = 0;
+      transactionsdata.value.forEach((element) => {
+        totalamount.value += parseFloat(element.amount);
+      });
     })
     .catch(() => {
       $q.notify({
@@ -387,6 +461,19 @@ function parseInfo(value, key) {
   } else {
     return "";
   }
+}
+
+function addColumn() {
+  columns.value.push({
+    name: "dede",
+    align: "center",
+    label: "dede",
+    field: "info",
+    sortable: true,
+    format: (val) => parseInfo(val, "Consumption"),
+  });
+  //columns.value.splice(columns.value.length - 1, 1);
+  getTransactionsData();
 }
 
 onMounted(() => {

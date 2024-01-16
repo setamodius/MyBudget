@@ -90,17 +90,10 @@ export default {
       search,
       toggleLeftDrawer,
       links1: [
-        { icon: "home", text: "Home", link: "/creditcardreports" },
-
         {
-          icon: "receipt_long",
-          text: "Kredi Kartı Raporları",
-          link: "/creditcardreports",
-        },
-        {
-          icon: "receipt_long",
-          text: "Harcama Raporları",
-          link: "/expensereports",
+          icon: "receipt",
+          text: "Summary",
+          link: "/summaries",
         },
         {
           icon: "receipt_long",
@@ -109,16 +102,6 @@ export default {
         },
       ],
       links2: [
-        {
-          icon: "folder",
-          text: "Kredi Kartı İşlemleri",
-          link: "/creditcardtransactions",
-        },
-        {
-          icon: "folder",
-          text: "Harcamalar",
-          link: "/expensetransactions",
-        },
         {
           icon: "folder",
           text: "Transactions",

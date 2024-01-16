@@ -58,12 +58,14 @@ router.post('/creditcards', dbapi.addCreditCard);
 router.put('/creditcards/:id', dbapi.updateCreditCard);
 router.put('/creditcards/:id', dbapi.updateCreditCard);
 router.get('/creditcards/:id/reports', dbapi.getCreditCardReport);
+router.get('/creditcards/reports', dbapi.getAllCreditCardReport);
 
 router.get('/expensetypes', dbapi.getExpenseTypes);
 router.post('/expensetypes', dbapi.addExpenseType);
 router.put('/expensetypes/:id', dbapi.updateExpenseType);
 router.delete('/expensetypes/:id', dbapi.deleteExpenseType);
 router.get('/expensetypes/:id/reports', dbapi.getExpenseReport);
+router.get('/expensetypes/reports', dbapi.getAllExpenseReport);
 
 router.get('/boxes', dbapi.getAllBoxes)
 
@@ -71,6 +73,8 @@ router.get('/transactions', dbapi.gettransactions);
 router.post('/transactions', dbapi.addtransaction);
 router.put('/transactions/:id', dbapi.updatetransaction);
 router.delete('/transactions/:id', dbapi.deletetransaction);
+
+router.get("/summaries", dbapi.getSummaries);
 
 app.use('/api/v1', router);
 
