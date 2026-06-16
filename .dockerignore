@@ -1,0 +1,7 @@
+node_modules
+budgetviewreact/node_modules
+budgetviewreact/dist
+budgetapi/node_modules
+budgetview
+.git
+*.md

@@ -19,28 +19,31 @@ const createtables = async (request, response) => {
     DROP TABLE IF EXISTS expenses_type;
 
     CREATE TABLE "expenses_type" (
-    "id" serial NOT NULL, 
+    "id" serial NOT NULL,
     "name" varchar NOT NULL,
 	  CONSTRAINT expenses_type_pk PRIMARY KEY ("id")
     ) WITH (
         OIDS=FALSE
-    );    
+    );
     CREATE TABLE "expenses" (
-    "id" serial NOT NULL, 
+    "id" serial NOT NULL,
     "typeid" integer REFERENCES expenses_type (id) MATCH FULL ON DELETE CASCADE ,
     "date" date NOT NULL,
     "installments" integer ,
     "description" varchar NOT NULL,
-    "amount" money,	
-    "paid" money,	
-    
+    "amount" money,
+    "paid" money,
+
 	  CONSTRAINT expenses_pk PRIMARY KEY ("id")
     ) WITH (
         OIDS=FALSE
-    );    
+    );
     `,
     (error, results) => {
-      console.log(error);
+      if (error) {
+        console.log(error);
+        return response.status(500).json(error);
+      }
       response.status(200).json(results);
     }
   );
@@ -50,9 +53,8 @@ const getCreditCards = async (request, response) => {
   pool.query(`SELECT * FROM creditcard_bank ORDER BY id`, (error, results) => {
     if (error) {
       console.log(error);
-      response.status(404).send(`Get credit card bank error.`);
+      return response.status(404).send(`Get credit card bank error.`);
     }
-    console.log(results.rows);
     response.status(200).json(results.rows);
   });
 };
@@ -66,9 +68,8 @@ const addCreditCards = async (request, response) => {
     (error, results) => {
       if (error) {
         console.log(error);
-        response.status(400).send(`CreditCards add error.`);
+        return response.status(400).send(`CreditCards add error.`);
       }
-
       response.status(201).send(`CreditCards added successfully.`);
     }
   );
@@ -84,7 +85,7 @@ const updateCreditCards = (request, response) => {
     (error, results) => {
       if (error) {
         console.log(error);
-        response.status(400).send(`Credit card modify error.`);
+        return response.status(400).send(`Credit card modify error.`);
       }
       response.status(200).send(`Credit card modified with ID: ${id}`);
     }
@@ -100,7 +101,7 @@ const deleteCreditCards = (request, response) => {
     (error, results) => {
       if (error) {
         console.log(error);
-        response.status(400).send(`Credit card delete error.`);
+        return response.status(400).send(`Credit card delete error.`);
       }
       response.status(200).send(`Credit card deleted with ID: ${id}`);
     }
@@ -115,7 +116,7 @@ const getTransactions = async (request, response) => {
     (error, results) => {
       if (error) {
         console.log(error);
-        response.status(404).send(`Get item error.`);
+        return response.status(404).send(`Get item error.`);
       }
       response.status(200).json(results.rows);
     }
@@ -125,16 +126,14 @@ const getTransactions = async (request, response) => {
 const addTransactions = async (request, response) => {
   const bankid = parseInt(request.params.bankid);
   const { date, description, installments, amount, paid } = request.body;
-  console.log(bankid);
   pool.query(
     'INSERT INTO creditcard (date, description,installments,amount,paid,bankid) VALUES ($1, $2, $3, $4,$5, $6)',
     [date, description, installments, amount, paid, bankid],
     (error, results) => {
       if (error) {
         console.log(error);
-        response.status(400).send(`Item add error.`);
+        return response.status(400).send(`Item add error.`);
       }
-
       response.status(201).send(`Item added successfully.`);
     }
   );
@@ -151,7 +150,7 @@ const updateTransactions = (request, response) => {
     (error, results) => {
       if (error) {
         console.log(error);
-        response.status(400).send(`Item modify error.`);
+        return response.status(400).send(`Item modify error.`);
       }
       response.status(200).send(`Item modified with ID: ${id}`);
     }
@@ -168,7 +167,7 @@ const deleteTransactions = (request, response) => {
     (error, results) => {
       if (error) {
         console.log(error);
-        response.status(400).send(`Item delete error.`);
+        return response.status(400).send(`Item delete error.`);
       }
       response.status(200).send(`User deleted with ID: ${id}`);
     }
@@ -180,21 +179,19 @@ const getcreaditcardsummary = (request, response) => {
   let start = request.query.start;
   let end = request.query.end;
   if (start === undefined || end === undefined) {
-    response.status(404).send(`Parameter error.`);
+    return response.status(400).send(`Parameter error.`);
   }
-  var startdate = new Date(start);
-  let enddate = new Date(end);
 
   pool.query(
-    `WITH cte AS (SELECT date_trunc('month', date) AS month,coalesce(sum(amount), '$0') AS dept, coalesce(sum(paid), '$0') AS payload FROM creditcard WHERE (bankid = $1) GROUP BY month ORDER BY month),
+    `WITH cte AS (SELECT date_trunc('month', date) AS month,coalesce(sum(amount), '$0') AS dept, coalesce(sum(paid), '$0') AS payload FROM creditcard WHERE (bankid = $1) AND date >= $2 AND date <= $3 GROUP BY month ORDER BY month),
         cte2 AS (select *, SUM(dept) OVER (ORDER BY month) cum_dept, SUM(payload) OVER (ORDER BY month) cum_payload from cte),
         cte3 AS (select *, LAG(cum_dept ,1) OVER (ORDER BY month) pre_cum_dept  FROM cte2)
       SELECT month, dept, cum_dept, payload,cum_payload,(pre_cum_dept - cum_payload ) as tobepaid FROM cte3`,
-    [bankid],
+    [bankid, start, end],
     (error, results) => {
       if (error) {
         console.log(error);
-        response.status(404).send(`Get item error.`);
+        return response.status(404).send(`Get item error.`);
       }
       response.status(200).json(results.rows);
     }
@@ -202,24 +199,22 @@ const getcreaditcardsummary = (request, response) => {
 };
 
 const getallcreaditcardsummary = (request, response) => {
-  const bankid = parseInt(request.params.bankid);
   let start = request.query.start;
   let end = request.query.end;
   if (start === undefined || end === undefined) {
-    response.status(404).send(`Parameter error.`);
+    return response.status(400).send(`Parameter error.`);
   }
-  var startdate = new Date(start);
-  let enddate = new Date(end);
 
   pool.query(
-    `WITH cte AS (SELECT date_trunc('month', date) AS month,coalesce(sum(amount), '$0') AS dept, coalesce(sum(paid), '$0') AS payload FROM creditcard GROUP BY month ORDER BY month),
+    `WITH cte AS (SELECT date_trunc('month', date) AS month,coalesce(sum(amount), '$0') AS dept, coalesce(sum(paid), '$0') AS payload FROM creditcard WHERE date >= $1 AND date <= $2 GROUP BY month ORDER BY month),
         cte2 AS (select *, SUM(dept) OVER (ORDER BY month) cum_dept, SUM(payload) OVER (ORDER BY month) cum_payload from cte),
         cte3 AS (select *, LAG(cum_dept ,1) OVER (ORDER BY month) pre_cum_dept  FROM cte2)
       SELECT month, dept, cum_dept, payload,cum_payload,(pre_cum_dept - cum_payload ) as tobepaid FROM cte3`,
+    [start, end],
     (error, results) => {
       if (error) {
         console.log(error);
-        response.status(404).send(`Get item error.`);
+        return response.status(404).send(`Get item error.`);
       }
       response.status(200).json(results.rows);
     }
@@ -230,9 +225,8 @@ const getExpenseType = async (request, response) => {
   pool.query(`SELECT * FROM expenses_type ORDER BY id`, (error, results) => {
     if (error) {
       console.log(error);
-      response.status(404).send(`Get expense type error.`);
+      return response.status(404).send(`Get expense type error.`);
     }
-    console.log(results.rows);
     response.status(200).json(results.rows);
   });
 };
@@ -246,9 +240,8 @@ const addExpenseType = async (request, response) => {
     (error, results) => {
       if (error) {
         console.log(error);
-        response.status(400).send(`Expense type add error.`);
+        return response.status(400).send(`Expense type add error.`);
       }
-
       response.status(201).send(`Expense type added successfully.`);
     }
   );
@@ -264,7 +257,7 @@ const updateExpenseType = (request, response) => {
     (error, results) => {
       if (error) {
         console.log(error);
-        response.status(400).send(`Expense type modify error.`);
+        return response.status(400).send(`Expense type modify error.`);
       }
       response.status(200).send(`Expense type modified with ID: ${id}`);
     }
@@ -280,7 +273,7 @@ const deleteExpenseType = (request, response) => {
     (error, results) => {
       if (error) {
         console.log(error);
-        response.status(400).send(`Expense type delete error.`);
+        return response.status(400).send(`Expense type delete error.`);
       }
       response.status(200).send(`Expense type deleted with ID: ${id}`);
     }
@@ -295,7 +288,7 @@ const getExpenseTransactions = async (request, response) => {
     (error, results) => {
       if (error) {
         console.log(error);
-        response.status(404).send(`Get item error.`);
+        return response.status(404).send(`Get item error.`);
       }
       response.status(200).json(results.rows);
     }
@@ -305,16 +298,14 @@ const getExpenseTransactions = async (request, response) => {
 const addExpenseTransactions = async (request, response) => {
   const typeid = parseInt(request.params.typeid);
   const { date, description, installments, amount, paid } = request.body;
-  console.log(request.body);
   pool.query(
     'INSERT INTO expenses (date, description,installments,amount,paid,typeid) VALUES ($1, $2, $3, $4,$5, $6)',
     [date, description, installments, amount, paid, typeid],
     (error, results) => {
       if (error) {
         console.log(error);
-        response.status(400).send(`Item add error.`);
+        return response.status(400).send(`Item add error.`);
       }
-
       response.status(201).send(`Item added successfully.`);
     }
   );
@@ -331,7 +322,7 @@ const updateExpenseTransactions = (request, response) => {
     (error, results) => {
       if (error) {
         console.log(error);
-        response.status(400).send(`Item modify error.`);
+        return response.status(400).send(`Item modify error.`);
       }
       response.status(200).send(`Item modified with ID: ${id}`);
     }
@@ -348,7 +339,7 @@ const deleteExpenseTransactions = (request, response) => {
     (error, results) => {
       if (error) {
         console.log(error);
-        response.status(400).send(`Item delete error.`);
+        return response.status(400).send(`Item delete error.`);
       }
       response.status(200).send(`User deleted with ID: ${id}`);
     }
@@ -357,22 +348,22 @@ const deleteExpenseTransactions = (request, response) => {
 
 const getexpensesummary = (request, response) => {
   const typeid = parseInt(request.params.typeid);
+  let start = request.query.start;
+  let end = request.query.end;
 
   if (start === undefined || end === undefined) {
-    response.status(404).send(`Parameter error.`);
+    return response.status(400).send(`Parameter error.`);
   }
-  var startdate = new Date(start);
-  let enddate = new Date(end);
 
   pool.query(
-    `WITH cte AS (SELECT date_trunc('month', date) AS month,coalesce(sum(amount), '$0') AS dept, coalesce(sum(paid), '$0') AS payload FROM expenses WHERE typeid = $1 GROUP BY month ORDER BY month),
+    `WITH cte AS (SELECT date_trunc('month', date) AS month,coalesce(sum(amount), '$0') AS dept, coalesce(sum(paid), '$0') AS payload FROM expenses WHERE typeid = $1 AND date >= $2 AND date <= $3 GROUP BY month ORDER BY month),
     cte2 AS (select *, SUM(dept) OVER (ORDER BY month) cum_dept, SUM(payload) OVER (ORDER BY month) cum_payload from cte)
     SELECT month, dept, cum_dept, payload,cum_payload,(cum_dept- cum_payload ) as tobepaid FROM cte2`,
-    [typeid],
+    [typeid, start, end],
     (error, results) => {
       if (error) {
         console.log(error);
-        response.status(404).send(`Get item error.`);
+        return response.status(404).send(`Get item error.`);
       }
       response.status(200).json(results.rows);
     }
@@ -380,23 +371,21 @@ const getexpensesummary = (request, response) => {
 };
 
 const getallexpensesummary = (request, response) => {
-  const bankid = parseInt(request.params.bankid);
   let start = request.query.start;
   let end = request.query.end;
   if (start === undefined || end === undefined) {
-    response.status(404).send(`Parameter error.`);
+    return response.status(400).send(`Parameter error.`);
   }
-  var startdate = new Date(start);
-  let enddate = new Date(end);
 
   pool.query(
-    `WITH cte AS (SELECT date_trunc('month', date) AS month,coalesce(sum(amount), '$0') AS dept, coalesce(sum(paid), '$0') AS payload FROM expenses GROUP BY month ORDER BY month),
+    `WITH cte AS (SELECT date_trunc('month', date) AS month,coalesce(sum(amount), '$0') AS dept, coalesce(sum(paid), '$0') AS payload FROM expenses WHERE date >= $1 AND date <= $2 GROUP BY month ORDER BY month),
     cte2 AS (select *, SUM(dept) OVER (ORDER BY month) cum_dept, SUM(payload) OVER (ORDER BY month) cum_payload from cte)
     SELECT month, dept, cum_dept, payload,cum_payload,(cum_dept- cum_payload ) as tobepaid FROM cte2`,
+    [start, end],
     (error, results) => {
       if (error) {
         console.log(error);
-        response.status(404).send(`Get item error.`);
+        return response.status(404).send(`Get item error.`);
       }
       response.status(200).json(results.rows);
     }

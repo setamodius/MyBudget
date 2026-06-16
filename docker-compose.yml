@@ -1,0 +1,9 @@
+services:
+  mybudget:
+    image: mybudget:1.0.0
+    container_name: mybudget
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env

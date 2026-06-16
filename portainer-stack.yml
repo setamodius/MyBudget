@@ -1,0 +1,14 @@
+services:
+  mybudget:
+    image: mybudget:latest
+    container_name: mybudget
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      USER: ${DB_USER}
+      HOST: ${DB_HOST}
+      DATABASE: ${DB_NAME}
+      PASSWORD: ${DB_PASSWORD}
+      PORT: ${DB_PORT}
+      API_PORT: 5000

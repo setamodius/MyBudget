@@ -1,8 +1,9 @@
 const express = require('express');
+const path = require('path');
+require('dotenv').config();
 const app = express();
-const port = 5000;
+const port = process.env.API_PORT || 5000;
 const router = express.Router()
-const oldrouter = express.Router()
 var cors = require('cors');
 app.use(express.json());
 app.use(cors());
@@ -11,39 +12,8 @@ app.listen(port, () => {
   console.log(`Budget API running on port ${port}.`);
 });
 
-const api = require('./api');
-
-app.get('/create/', api.createtables);
-
-router.get('/creditcard/', api.getCreditCards);
-router.post('/creditcard/', api.addCreditCards);
-router.delete('/creditcard/:id', api.deleteCreditCards);
-router.put('/creditcard/:id', api.updateCreditCards);
-
-router.get('/creditcard/:bankid/transactions/', api.getTransactions);
-router.post('/creditcard/:bankid/transactions/', api.addTransactions);
-router.delete('/creditcard/:bankid/transactions/:id', api.deleteTransactions);
-router.put('/creditcard/:bankid/transactions/:id', api.updateTransactions);
-
-router.get('/creditcard/:bankid/summary/', api.getcreaditcardsummary);
-router.get('/creditcard/summary/', api.getallcreaditcardsummary);
-
-router.get('/expenses/', api.getExpenseType);
-router.post('/expenses/', api.addExpenseType);
-router.delete('/expenses/:id', api.deleteExpenseType);
-router.put('/expenses/:id', api.updateExpenseType);
-
-router.get('/expenses/:typeid/transactions/', api.getExpenseTransactions);
-router.post('/expenses/:typeid/transactions/', api.addExpenseTransactions);
-router.delete('/expenses/:typeid/transactions/:id', api.deleteExpenseTransactions);
-router.put('/expenses/:typeid/transactions/:id', api.updateExpenseTransactions);
-
-router.get('/expenses/:typeid/summary/', api.getexpensesummary);
-router.get('/expenses/summary/', api.getallexpensesummary);
-
-app.use('/api/v1', oldrouter);
-
 const dbapi = require('./dbapi');
+dbapi.seedDatabase();
 router.post('/create', dbapi.formatdb);
 
 router.get('/incomes', dbapi.getIncomes);
@@ -52,29 +22,65 @@ router.put('/incomes/:id', dbapi.updateIncome);
 router.delete('/incomes/:id', dbapi.deleteIncome);
 router.get('/incomes/:id/reports', dbapi.getIncomeReport);
 
-
 router.get('/creditcards', dbapi.getCreditCards);
 router.post('/creditcards', dbapi.addCreditCard);
 router.put('/creditcards/:id', dbapi.updateCreditCard);
-router.put('/creditcards/:id', dbapi.updateCreditCard);
-router.get('/creditcards/:id/reports', dbapi.getCreditCardReport);
+router.delete('/creditcards/:id', dbapi.deleteCreditCard);
 router.get('/creditcards/reports', dbapi.getAllCreditCardReport);
+router.get('/creditcards/:id/reports', dbapi.getCreditCardReport);
+router.get('/creditcards/:id/transactions', dbapi.getCreditCardMonthlyTransactions);
 
 router.get('/expensetypes', dbapi.getExpenseTypes);
 router.post('/expensetypes', dbapi.addExpenseType);
 router.put('/expensetypes/:id', dbapi.updateExpenseType);
 router.delete('/expensetypes/:id', dbapi.deleteExpenseType);
-router.get('/expensetypes/:id/reports', dbapi.getExpenseReport);
 router.get('/expensetypes/reports', dbapi.getAllExpenseReport);
+router.get('/expensetypes/monthly-breakdown', dbapi.getMonthlyExpenseBreakdown);
+router.get('/expensetypes/:id/reports', dbapi.getExpenseReport);
 
 router.get('/boxes', dbapi.getAllBoxes)
 
 router.get('/transactions', dbapi.gettransactions);
 router.post('/transactions', dbapi.addtransaction);
+router.post('/incomes/transactions', dbapi.addincometransaction);
 router.put('/transactions/:id', dbapi.updatetransaction);
 router.delete('/transactions/:id', dbapi.deletetransaction);
 
 router.get("/summaries", dbapi.getSummaries);
 
+router.get('/boxtypes', dbapi.getBoxTypes);
+
+router.get('/storages', dbapi.getStorages);
+router.post('/storages', dbapi.addStorage);
+router.put('/storages/:id', dbapi.updateStorage);
+router.delete('/storages/:id', dbapi.deleteStorage);
+router.get('/storages/reports', dbapi.getAllStorageReport);
+router.get('/storages/:id/reports', dbapi.getStorageReport);
+
+router.get('/investments', dbapi.getInvestments);
+router.post('/investments', dbapi.addInvestment);
+router.put('/investments/:id', dbapi.updateInvestment);
+router.delete('/investments/:id', dbapi.deleteInvestment);
+router.get('/investments/reports', dbapi.getAllInvestmentReport);
+router.get('/investments/:id/reports', dbapi.getInvestmentReport);
+
+router.get('/generators', dbapi.getGenerators);
+router.get('/destroyers', dbapi.getDestroyers);
+router.get('/boxdirections', dbapi.getBoxDirections);
+router.get('/balances', dbapi.getbalances);
+router.get('/flows', dbapi.getFlows);
+
+router.get('/period-summary', dbapi.getPeriodSummary);
+
+router.get('/installment-plans', dbapi.getInstallmentPlans);
+router.get('/installment-plans/:id', dbapi.getInstallmentPlan);
+router.post('/installment-plans', dbapi.createInstallmentPlan);
+router.delete('/installment-plans/:id', dbapi.deleteInstallmentPlan);
+
 app.use('/api/v1', router);
 
+const publicDir = path.join(__dirname, 'public');
+app.use(express.static(publicDir));
+app.get('*', (req, res) => {
+  res.sendFile(path.join(publicDir, 'index.html'));
+});
