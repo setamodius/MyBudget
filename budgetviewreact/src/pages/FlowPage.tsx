@@ -14,7 +14,7 @@ const TYPE_LABELS: Record<string, string> = {
 }
 
 const PERIODS = [
-  { label: "Bu Ay",     getRange: () => ({ start: monthsAgo(0),  end: today() }) },
+  { label: "Ay Başından Beri", getRange: () => ({ start: monthsAgo(0),  end: today() }) },
   { label: "Son 3 Ay",  getRange: () => ({ start: monthsAgo(2),  end: today() }) },
   { label: "Son 12 Ay", getRange: () => ({ start: monthsAgo(11), end: today() }) },
   { label: "Tümü",      getRange: () => ({ start: undefined,     end: undefined }) },

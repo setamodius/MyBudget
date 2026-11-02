@@ -437,13 +437,14 @@ function ButceAnalizi({ month }: { month: string }) {
       {/* Özet */}
       <div className="grid grid-cols-3 gap-2">
         {[
-          { label: "Bütçe",    value: totalCeiling,   color: "text-purple-500" },
-          { label: "Harcanan", value: totalActual,    color: "text-foreground" },
-          { label: "Kalan",    value: totalRemaining, color: totalOver ? "text-red-500" : "text-emerald-500" },
-        ].map(({ label, value, color }) => (
+          { label: "Bütçe",    value: totalCeiling,   color: "text-purple-500", hint: "aylık plan" },
+          { label: "Harcanan", value: totalActual,    color: "text-foreground", hint: "takvim ayı, taksitler dahil" },
+          { label: "Kalan",    value: totalRemaining, color: totalOver ? "text-red-500" : "text-emerald-500", hint: "bütçe − harcanan" },
+        ].map(({ label, value, color, hint }) => (
           <div key={label} className="rounded-xl border border-border p-3 text-center">
             <p className="text-[10px] text-muted-foreground mb-1">{label}</p>
             <p className={`text-sm font-bold font-mono ${color}`}>{formatCurrency(value)}</p>
+            <p className="text-[10px] text-muted-foreground/70 mt-0.5">{hint}</p>
           </div>
         ))}
       </div>

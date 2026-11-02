@@ -42,8 +42,11 @@ export function StatusPage() {
 
   const { start: monthStart, end: monthEnd } = monthRange(selectedMonth)
   const prevMonthEnd = prevDay(monthStart)
+  // İçinde bulunulan ay için bakiye bugün itibarıyla (ileri tarihli taksitler henüz borç değil);
+  // geçmiş aylar için ay sonu itibarıyla
+  const balanceDate = selectedMonth === currentYearMonth() ? today() : monthEnd
 
-  const { data: balances = [], isLoading: balLoading } = useQuery({ queryKey: ["balances", monthEnd], queryFn: () => getBalances(monthEnd) })
+  const { data: balances = [], isLoading: balLoading } = useQuery({ queryKey: ["balances", balanceDate], queryFn: () => getBalances(balanceDate) })
   const { data: prevBalances = [] } = useQuery({ queryKey: ["balances", prevMonthEnd], queryFn: () => getBalances(prevMonthEnd) })
   const { data: summaries = [], isLoading: sumLoading } = useQuery({ queryKey: ["summaries"], queryFn: getSummaries })
   const { data: allBoxes = [] } = useQuery({ queryKey: ["boxes", "all"], queryFn: getAllBoxes })
@@ -185,6 +188,9 @@ export function StatusPage() {
                   <CardContent className="p-3">
                     <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">{label}</p>
                     <p className={`text-sm font-bold mt-1 ${color}`}>{formatCurrency(value)}</p>
+                    <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+                      {billingCycleNote ? "ekstre dönemi, taksitler dahil" : "takvim ayı"}
+                    </p>
                   </CardContent>
                 </Card>
               ))}
@@ -206,7 +212,7 @@ export function StatusPage() {
                   <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-border/50 text-[11px] font-mono text-muted-foreground">
                     <span>Ay Başı {formatCurrency(prevTotalStorage)}</span>
                     <span>{monthlyFlow.cashBalance >= 0 ? "+" : "−"} {formatCurrency(Math.abs(monthlyFlow.cashBalance))}</span>
-                    <span>= Ay Sonu <span className="text-foreground font-semibold">{formatCurrency(totalStorage)}</span></span>
+                    <span>= {balanceDate === monthEnd ? "Ay Sonu" : "Bugün"} <span className="text-foreground font-semibold">{formatCurrency(totalStorage)}</span></span>
                   </div>
                 </CardContent>
               </Card>

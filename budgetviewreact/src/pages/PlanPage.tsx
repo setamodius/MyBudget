@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { getAllBoxes, getBoxes } from "@/api/boxes"
+import { getAllBoxes } from "@/api/boxes"
 import { getTransactions, addTransaction, updateTransaction, deleteTransaction } from "@/api/transactions"
 import { getInstallmentPlans, getInstallmentPlanDetail, createInstallmentPlan, deleteInstallmentPlan, updateInstallmentPlan } from "@/api/installments"
 import { InstallmentRepair } from "@/components/InstallmentRepair"
@@ -14,9 +14,9 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { formatCurrency, today } from "@/lib/utils"
-import { CalendarDays, Target, CreditCard, Plus, Trash2, ChevronDown, TrendingUp, LayoutGrid, Printer, Pencil, Wrench, Check } from "lucide-react"
+import { CalendarDays, CreditCard, Plus, Trash2, ChevronDown, TrendingUp, LayoutGrid, Printer, Pencil, Wrench, Check } from "lucide-react"
 import { usePrint } from "@/lib/print"
-import type { Box } from "@/types"
+import type { Box, BoxReport } from "@/types"
 
 const MONTHS = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
   "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"]
@@ -244,114 +244,6 @@ function GelirPlani({ boxes }: { boxes: Box[] }) {
           ? `Kaydet (${[newCount > 0 ? `${newCount} yeni` : "", updateCount > 0 ? `${updateCount} güncelle` : ""].filter(Boolean).join(", ")})`
           : "Değişiklik yok"}
       </Button>
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Gider Bütçesi
-// ---------------------------------------------------------------------------
-function GiderButcesi() {
-  const { data: expenseBoxes = [] } = useQuery({ queryKey: ["boxes", "expensetypes"], queryFn: () => getBoxes("expensetypes") })
-  const { data: ccBoxes = [] } = useQuery({ queryKey: ["boxes", "creditcards"], queryFn: () => getBoxes("creditcards") })
-
-  const { periodStart, periodEnd, periodLabel } = useMemo(() => {
-    const now = new Date()
-    const fmt = (d: Date) =>
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
-    const todayStr = fmt(now)
-
-    const ccWithSettlement = ccBoxes.filter(b => b.settlement && b.settlement > 0)
-    if (ccWithSettlement.length === 0) {
-      return {
-        periodStart: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`,
-        periodEnd: todayStr,
-        periodLabel: now.toLocaleDateString("tr-TR", { month: "long", year: "numeric" }) + " bütçesi",
-      }
-    }
-
-    const settlementDay = Math.min(...ccWithSettlement.map(b => b.settlement!))
-    let cycleStart: Date, cycleEnd: Date
-    if (now.getDate() <= settlementDay) {
-      cycleStart = new Date(now.getFullYear(), now.getMonth() - 1, settlementDay + 1)
-      cycleEnd   = new Date(now.getFullYear(), now.getMonth(),     settlementDay)
-    } else {
-      cycleStart = new Date(now.getFullYear(), now.getMonth(),     settlementDay + 1)
-      cycleEnd   = new Date(now.getFullYear(), now.getMonth() + 1, settlementDay)
-    }
-
-    const startLabel = cycleStart.toLocaleDateString("tr-TR", { day: "numeric", month: "long" })
-    const endLabel   = cycleEnd.toLocaleDateString("tr-TR",   { day: "numeric", month: "long", year: "numeric" })
-
-    return {
-      periodStart: fmt(cycleStart),
-      periodEnd: todayStr,
-      periodLabel: `${startLabel} – ${endLabel} (kesim: ${settlementDay})`,
-    }
-  }, [ccBoxes])
-
-  const { data: monthlyTx = [] } = useQuery({
-    queryKey: ["transactions", "budget-month", periodStart, periodEnd],
-    queryFn: () => getTransactions({ start: periodStart, end: periodEnd }),
-  })
-
-  const spentByCategory = useMemo(() => {
-    const map: Record<number, number> = {}
-    for (const tx of monthlyTx) {
-      const target = expenseBoxes.find(b => b.id === tx.tobox)
-      if (target) map[target.id] = (map[target.id] ?? 0) + parseFloat(tx.amount)
-    }
-    return map
-  }, [monthlyTx, expenseBoxes])
-
-  if (expenseBoxes.length === 0) {
-    return (
-      <div className="text-center py-12 text-sm text-muted-foreground">
-        Tanımlar sayfasından gider türü ekleyin.
-      </div>
-    )
-  }
-
-  return (
-    <div className="space-y-3">
-      <p className="text-xs text-muted-foreground px-1">{periodLabel}</p>
-      {expenseBoxes.map(box => {
-        const spent  = spentByCategory[box.id] ?? 0
-        const budget = box.pluslimit ? parseFloat(String(box.pluslimit)) : null
-        const pct    = budget ? Math.min((spent / budget) * 100, 100) : null
-        const over   = budget ? spent > budget : false
-
-        return (
-          <div key={box.id} className="rounded-xl border border-border p-4 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">{box.name}</span>
-              <span className={`text-sm font-semibold font-mono ${over ? "text-red-500" : "text-foreground"}`}>
-                {formatCurrency(spent)}
-                {budget && (
-                  <span className="text-xs text-muted-foreground font-normal ml-1">/ {formatCurrency(budget)}</span>
-                )}
-              </span>
-            </div>
-            {budget ? (
-              <>
-                <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all ${over ? "bg-red-500" : pct! > 80 ? "bg-amber-500" : "bg-emerald-500"}`}
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-                <p className="text-[10px] text-muted-foreground">
-                  {over
-                    ? `Bütçe ${formatCurrency(spent - budget)} aşıldı`
-                    : `${formatCurrency(budget - spent)} kaldı (%${Math.round(100 - pct!)})`}
-                </p>
-              </>
-            ) : (
-              <p className="text-[10px] text-muted-foreground">Limit tanımlanmamış — Ayarlar'dan belirleyin</p>
-            )}
-          </div>
-        )
-      })}
     </div>
   )
 }
@@ -964,6 +856,27 @@ function addMonths(d: Date, count: number): Date {
   return new Date(d.getFullYear(), d.getMonth() + count, 1)
 }
 
+// Kredi kartından bu ay ve gelecek ay ödenecek tutarlar.
+// Kart raporu ekstre dönemi bazlıdır; total_balance = o dönemin kesimindeki kümülatif bakiye
+// (negatif = borç, ödemeler dahil) ve ekstre tutarıyla birebir tutar. Dönemin brüt harcaması
+// ödenecek tutar değildir: dönem içinde yapılan ödemeler (ön ödemeler) düşülmelidir.
+function ccDueByMonth(reports: BoxReport[], now = new Date()): Record<string, number> {
+  const cur  = monthKey(now)
+  const prev = monthKey(addMonths(now, -1))
+  const next = monthKey(addMonths(now, 1))
+  const sorted = [...reports].sort((a, b) => a.month.localeCompare(b.month))
+  // Belirtilen dönem ya da (o ay hareket yoksa) önceki son dönem itibarıyla borç
+  const debtAt = (k: string) => {
+    let row: BoxReport | undefined
+    for (const r of sorted) if (r.month.slice(0, 7) <= k) row = r
+    return -parseFloat(row?.total_balance ?? "0")
+  }
+  const paidThisMonth = parseFloat(sorted.find(r => r.month.startsWith(cur))?.income ?? "0")
+  const dueThis = Math.max(0, debtAt(prev) - paidThisMonth)
+  const dueNext = Math.max(0, debtAt(cur) - dueThis)
+  return { [cur]: dueThis, [next]: dueNext }
+}
+
 interface YakinDonemAy {
   key: string
   label: string
@@ -1011,6 +924,12 @@ function YakinDonem({ boxes }: { boxes: Box[] }) {
     queryFn: getInstallmentPlans,
   })
 
+  const { data: ccReports = [] } = useQuery({
+    queryKey: ["report", "creditcards", "all"],
+    queryFn: () => getAllBoxReport("creditcards"),
+  })
+  const ccDue = useMemo(() => ccDueByMonth(ccReports), [ccReports])
+
   const boxTypeMap = useMemo(() => new Map(boxes.map(b => [b.id, b.boxtypeid])), [boxes])
   const expenseBoxes = useMemo(() => boxes.filter(b => b.boxtypeid === 3 && b.name !== "Void"), [boxes])
   const expenseIdSet = useMemo(() => new Set(expenseBoxes.map(b => b.id)), [expenseBoxes])
@@ -1041,6 +960,15 @@ function YakinDonem({ boxes }: { boxes: Box[] }) {
     const catData: Record<string, { budgets: number; installments: number }> = {}
     const actualCatData: Record<string, number> = {}
 
+    // Ekstreden gelen taksitlerin gerçek satırı (Kart/Hesap → Gider, info.plan_id) zaten
+    // gerçek harcama ve KK borcu olarak sayılıyor; aynı taksidin bütçe satırı tekrar sayılmamalı.
+    const realizedInstallments = new Set<string>()
+    for (const tx of txList) {
+      if (tx.info?.plan_id && tx.info?.installment_no && expenseIdSet.has(tx.tobox)) {
+        realizedInstallments.add(`${tx.info.plan_id}-${tx.info.installment_no}`)
+      }
+    }
+
     for (const tx of txList) {
       const txKey = tx.date.slice(0, 7)
       const fromType = boxTypeMap.get(tx.frombox)
@@ -1063,11 +991,7 @@ function YakinDonem({ boxes }: { boxes: Box[] }) {
         actualCatData[catKey] = (actualCatData[catKey] ?? 0) - amount
       }
 
-      if (fromType === 2 && toType !== 2 && toType !== 6) {
-        const settlement = ccSettlementMap.get(tx.frombox) ?? 31
-        const paymentKey = getCCPaymentMonth(tx.date, settlement)
-        if (map[paymentKey]) map[paymentKey].cardDue += amount
-      }
+      // Gerçek kart harcamalarının ödenecek tutarı kart raporundan (ccDue) gelir; burada toplanmaz
 
       if (expenseIdSet.has(tx.frombox) && destroyerIdSet.has(tx.tobox)) {
         let effectiveKey = txKey
@@ -1091,8 +1015,12 @@ function YakinDonem({ boxes }: { boxes: Box[] }) {
           if (tx.info?.type === "budget") {
             catData[catKey].budgets += amount
           } else if (tx.info?.plan_id) {
+            // Gerçek satırı olan taksit yukarıda gerçek harcama + KK borcu olarak sayıldı;
+            // bütçe satırını ne plana ne gerçeğe ikinci kez ekle
+            if (realizedInstallments.has(`${tx.info.plan_id}-${tx.info.installment_no}`)) continue
+
             catData[catKey].installments += amount
-            
+
             // Treat installment as actual category spend so it reduces remainingPlan correctly
             actualCatData[catKey] = (actualCatData[catKey] ?? 0) + amount
             
@@ -1125,10 +1053,11 @@ function YakinDonem({ boxes }: { boxes: Box[] }) {
       }
       data.plannedExpense = totalPlanned
       data.remainingPlan = totalRemaining
+      data.cardDue += ccDue[month.key] ?? 0
     }
 
     return map
-  }, [txList, boxTypeMap, months, expenseIdSet, destroyerIdSet, ccSettlementMap, planPaymentBoxMap, expenseBoxes])
+  }, [txList, boxTypeMap, months, expenseIdSet, destroyerIdSet, ccSettlementMap, planPaymentBoxMap, expenseBoxes, ccDue])
 
   const totals = months.reduce((acc, month) => {
     const data = byMonth[month.key]
@@ -1270,13 +1199,8 @@ function Projeksiyon({ boxes }: { boxes: Box[] }) {
     queryKey: ["report", "creditcards", "all"],
     queryFn: () => getAllBoxReport("creditcards"),
   })
-  const prevCCExpense = useMemo(() => {
-    const prev = new Date()
-    prev.setMonth(prev.getMonth() - 1)
-    const prevKey = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}`
-    const report = ccReports.find(r => r.month.startsWith(prevKey))
-    return report ? parseFloat(report.expense ?? "0") : 0
-  }, [ccReports])
+  // Geçen dönem ekstresinden bu ay hâlâ ödenecek kalan
+  const prevCCExpense = useMemo(() => ccDueByMonth(ccReports)[monthKey(new Date())] ?? 0, [ccReports])
 
   const boxTypeMap     = useMemo(() => new Map(boxes.map(b => [b.id, b.boxtypeid])), [boxes])
   const expenseBoxList = useMemo(() => boxes.filter(b => b.boxtypeid === 3 && b.name !== "Void"), [boxes])
@@ -1507,7 +1431,7 @@ export function PlanPage() {
             </TabsTrigger>
             <TabsTrigger value="yakindonem">
               <CalendarDays className="h-3.5 w-3.5 mr-1.5" />
-              Yakin Donem
+              Yakın Dönem
             </TabsTrigger>
             <TabsTrigger value="giderplani">
               <LayoutGrid className="h-3.5 w-3.5 mr-1.5" />
@@ -1516,10 +1440,6 @@ export function PlanPage() {
             <TabsTrigger value="gelir">
               <CalendarDays className="h-3.5 w-3.5 mr-1.5" />
               Gelir Planı
-            </TabsTrigger>
-            <TabsTrigger value="butce">
-              <Target className="h-3.5 w-3.5 mr-1.5" />
-              Gider Bütçesi
             </TabsTrigger>
             <TabsTrigger value="taksit">
               <CreditCard className="h-3.5 w-3.5 mr-1.5" />
@@ -1548,10 +1468,6 @@ export function PlanPage() {
                 <GelirPlani boxes={boxes} />
               </CardContent>
             </Card>
-          </TabsContent>
-
-          <TabsContent value="butce">
-            <GiderButcesi />
           </TabsContent>
 
           <TabsContent value="taksit">

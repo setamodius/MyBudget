@@ -45,7 +45,7 @@ export const FLOW_LABELS: Record<string, { label: string; cls: string }> = {
   "6-3": { label: "Gider",        cls: "bg-rose-500/10 text-rose-500 border-rose-500/20" },
   "7-6": { label: "Çekim",        cls: "bg-teal-500/10 text-teal-500 border-teal-500/20" },
   "2-3": { label: "KK Harcama",   cls: "bg-amber-500/10 text-amber-500 border-amber-500/20" },
-  "3-5": { label: "Harcama",      cls: "bg-red-500/10 text-red-500 border-red-500/20" },
+  "3-5": { label: "Gider Planı",  cls: "bg-blue-500/10 text-blue-500 border-blue-500/20" },
   "3-6": { label: "İade",         cls: "bg-cyan-500/10 text-cyan-500 border-cyan-500/20" },
 }
 
