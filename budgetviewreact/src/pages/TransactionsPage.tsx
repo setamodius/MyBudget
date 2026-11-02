@@ -6,8 +6,8 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { formatCurrency, monthsAgo, today, getFlowLabel } from "@/lib/utils"
-import { ChevronRight, Pencil, Trash2, ArrowUpDown, ArrowUp, ArrowDown, List } from "lucide-react"
-import { EditTransactionDialog, DeleteTransactionDialog } from "@/components/TransactionDialogs"
+import { ChevronRight, Pencil, Trash2, ArrowUpDown, ArrowUp, ArrowDown, List, Layers } from "lucide-react"
+import { EditTransactionDialog, DeleteTransactionDialog, InstallmentizeDialog } from "@/components/TransactionDialogs"
 import type { Transaction } from "@/types"
 
 const PERIODS = [
@@ -28,6 +28,7 @@ export function TransactionsPage() {
   const [sortDir, setSortDir]     = useState<SortDir>("desc")
   const [deleteTarget, setDeleteTarget] = useState<Transaction | null>(null)
   const [editTarget, setEditTarget]     = useState<Transaction | null>(null)
+  const [instTarget, setInstTarget]     = useState<Transaction | null>(null)
 
   const period = PERIODS[periodIdx]
   const start  = period.start()
@@ -41,6 +42,12 @@ export function TransactionsPage() {
 
   const boxMap     = useMemo(() => new Map(allBoxes.map(b => [b.id, b.name])),     [allBoxes])
   const boxTypeMap = useMemo(() => new Map(allBoxes.map(b => [b.id, b.boxtypeid])), [allBoxes])
+
+  // Kart/hesaptan gidere yapılmış, henüz taksit planına bağlı olmayan harcamalar taksitlendirilebilir
+  const canInstallmentize = (tx: Transaction) =>
+    [2, 6].includes(boxTypeMap.get(tx.frombox) ?? 0) &&
+    boxTypeMap.get(tx.tobox) === 3 &&
+    !tx.info?.plan_id && !tx.info?.Taksit
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -180,6 +187,11 @@ export function TransactionsPage() {
                       </div>
 
                       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 shrink-0 transition-opacity">
+                        {canInstallmentize(tx) && (
+                          <Button variant="ghost" size="icon-sm" title="Taksitlendir" onClick={() => setInstTarget(tx)}>
+                            <Layers className="h-3.5 w-3.5 text-muted-foreground" />
+                          </Button>
+                        )}
                         <Button variant="ghost" size="icon-sm" onClick={() => setEditTarget(tx)}>
                           <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                         </Button>
@@ -207,6 +219,7 @@ export function TransactionsPage() {
 
       <EditTransactionDialog target={editTarget} onClose={() => setEditTarget(null)} />
       <DeleteTransactionDialog target={deleteTarget} onClose={() => setDeleteTarget(null)} />
+      <InstallmentizeDialog key={instTarget?.id ?? 0} target={instTarget} onClose={() => setInstTarget(null)} />
     </div>
   )
 }

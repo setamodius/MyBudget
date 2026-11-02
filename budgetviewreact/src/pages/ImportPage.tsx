@@ -1,10 +1,10 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "react-router-dom"
-import { Upload, FileText, CheckCircle2, XCircle, ChevronRight } from "lucide-react"
+import { Upload, FileText, CheckCircle2, XCircle, ChevronRight, Layers } from "lucide-react"
 import { getBoxes } from "@/api/boxes"
 import { addTransaction, getTransactions } from "@/api/transactions"
-import { getInstallmentPlans } from "@/api/installments"
+import { createInstallmentPlan, resolveInstallments } from "@/api/installments"
 import { parseAkbankCsv, type ParsedRow, type CsvMeta } from "@/lib/csvParser"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -55,7 +55,13 @@ interface RowState {
   selected: boolean
   tobox: number
   isDuplicate: boolean
-  plan_id: number
+  // Taksit satırları için
+  plan_id: number                 // > 0: mevcut plana bağlı (kategori plandan gelir)
+  plan_description: string | null
+  purchase_date: string | null
+  first_no: number
+  unlinked_tx_ids: number[]       // aynı alışverişin daha önce bağlanmamış taksitleri
+  resolved: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -192,10 +198,6 @@ export function ImportContent() {
     queryKey: ["boxes", "expensetypes"],
     queryFn: () => getBoxes("expensetypes"),
   })
-  const { data: plans = [] } = useQuery({
-    queryKey: ["installment-plans"],
-    queryFn: getInstallmentPlans,
-  })
 
   function handleFile(file: File) {
     setParseError("")
@@ -212,6 +214,11 @@ export function ImportContent() {
             tobox: 0,
             isDuplicate: false,
             plan_id: 0,
+            plan_description: null,
+            purchase_date: null,
+            first_no: r.installment?.current ?? 1,
+            unlinked_tx_ids: [],
+            resolved: false,
           }))
         )
         setStep("review")
@@ -222,52 +229,61 @@ export function ImportContent() {
     reader.readAsText(file, "windows-1254")
   }
 
+  // Kart seçilince: tekrar kontrolü + taksit satırlarını planlarla eşleştir
   useEffect(() => {
     if (frombox === 0 || rows.length === 0) return
+    let cancelled = false
 
     const dates = rows.map(r => r.parsed.date).sort()
     const start = dates[0]
     const end = dates[dates.length - 1]
+    const instRows = rows
+      .map((r, idx) => ({ r, idx }))
+      .filter(({ r }) => r.parsed.installment && !r.parsed.isPayment)
 
-    getTransactions({ from: frombox, start, end }).then(txs => {
-      const keys = new Set(
-        txs.map(t => `${t.date}|${parseFloat(t.amount).toFixed(2)}`)
-      )
+    Promise.all([
+      getTransactions({ from: frombox, start, end }),
+      instRows.length
+        ? resolveInstallments(frombox, instRows.map(({ r, idx }) => ({
+            key: String(idx),
+            description: r.parsed.description,
+            date: r.parsed.date,
+            no: r.parsed.installment!.current,
+            total: r.parsed.installment!.total,
+            amount: Math.abs(r.parsed.amount),
+          })))
+        : Promise.resolve([]),
+    ]).then(([txs, resolved]) => {
+      if (cancelled) return
+      const keys = new Set(txs.map(t => `${t.date}|${parseFloat(t.amount).toFixed(2)}`))
+      const byKey = new Map(resolved.map(x => [x.key, x]))
       setRows(prev =>
-        prev.map(r => {
+        prev.map((r, idx) => {
+          const res = byKey.get(String(idx))
+          if (res) {
+            const isDuplicate = res.duplicate_tx_id !== null
+            return {
+              ...r,
+              isDuplicate,
+              selected: isDuplicate ? false : r.selected,
+              plan_id: res.plan_id ?? 0,
+              plan_description: res.plan_description,
+              purchase_date: res.purchase_date,
+              first_no: res.first_no,
+              unlinked_tx_ids: res.unlinked_tx_ids,
+              tobox: res.plan_id && res.expense_box_id ? res.expense_box_id : (r.tobox || res.expense_box_id || 0),
+              resolved: true,
+            }
+          }
           const key = `${r.parsed.date}|${Math.abs(r.parsed.amount).toFixed(2)}`
           const isDuplicate = !r.parsed.isPayment && keys.has(key)
           return { ...r, isDuplicate, selected: isDuplicate ? false : r.selected }
         })
       )
     })
+    return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [frombox, rows.length])
-
-  // Auto-match installment rows to existing plans
-  useEffect(() => {
-    if (step !== "review" || plans.length === 0) return
-    setRows(prev => {
-      const hasUnmatched = prev.some(r => r.parsed.installment && r.plan_id === 0)
-      if (!hasUnmatched) return prev
-      return prev.map(row => {
-        if (!row.parsed.installment || row.plan_id !== 0) return row
-        const { total } = row.parsed.installment
-        const amount = row.parsed.amount
-        const matches = plans.filter(p =>
-          p.total_installments === total &&
-          Math.abs(parseFloat(p.amount_per_month) - amount) / amount < 0.02
-        )
-        if (matches.length !== 1) return row
-        return {
-          ...row,
-          plan_id: matches[0].id,
-          tobox: row.tobox === 0 ? matches[0].expense_box_id : row.tobox,
-        }
-      })
-    })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, plans])
 
   const selectedRows = useMemo(
     () => rows.filter(r => r.selected && !r.parsed.isPayment),
@@ -302,25 +318,11 @@ export function ImportContent() {
     )
   }
 
-  function setRowPlan(idx: number, plan_id: number) {
-    setRows(prev =>
-      prev.map((r, i) => {
-        if (i !== idx) return r
-        const plan = plans.find(p => p.id === plan_id)
-        return {
-          ...r,
-          plan_id,
-          tobox: plan && r.tobox === 0 ? plan.expense_box_id : r.tobox,
-        }
-      })
-    )
-  }
-
   function applyBulkCategory() {
     if (!bulkCategory) return
     setRows(prev =>
       prev.map(r =>
-        r.selected && !r.parsed.isPayment ? { ...r, tobox: bulkCategory } : r
+        r.selected && !r.parsed.isPayment && r.plan_id === 0 ? { ...r, tobox: bulkCategory } : r
       )
     )
   }
@@ -335,16 +337,40 @@ export function ImportContent() {
     let ok = 0
     let errors = 0
 
+    // Aynı dosyada aynı alışverişin birden fazla satırı varsa tek plan oluştur
+    const createdPlans = new Map<string, number>()
+
     for (let i = 0; i < toImport.length; i++) {
       const row = toImport[i]
       try {
         const info: Record<string, string> = {}
-        if (row.parsed.installment) {
-          info["Taksit"] = `${row.parsed.installment.current}/${row.parsed.installment.total}`
-        }
-        if (row.plan_id > 0 && row.parsed.installment) {
-          info["plan_id"] = String(row.plan_id)
-          info["installment_no"] = String(row.parsed.installment.current)
+        const inst = row.parsed.installment
+        if (inst) {
+          info["Taksit"] = `${inst.current}/${inst.total}`
+          let planId = row.plan_id
+          if (!planId && row.purchase_date) {
+            const groupKey = `${row.parsed.description}|${row.purchase_date}|${inst.total}`
+            planId = createdPlans.get(groupKey) ?? 0
+            if (!planId) {
+              const created = await createInstallmentPlan({
+                description: row.parsed.description,
+                merchant: row.parsed.description,
+                expense_box_id: row.tobox,
+                payment_box_id: frombox,
+                purchase_date: row.purchase_date,
+                total_installments: inst.total,
+                amount_per_month: Math.abs(row.parsed.amount),
+                first_no: Math.min(row.first_no, inst.current),
+                link_tx_ids: row.unlinked_tx_ids,
+              })
+              planId = created.id
+              createdPlans.set(groupKey, planId)
+            }
+          }
+          if (planId) {
+            info["plan_id"] = String(planId)
+            info["installment_no"] = String(inst.current)
+          }
         }
         await addTransaction({
           date: row.parsed.date,
@@ -361,6 +387,7 @@ export function ImportContent() {
       setImportProgress(i + 1)
     }
 
+    qc.invalidateQueries({ queryKey: ["installment-plans"] })
     qc.invalidateQueries({ queryKey: ["transactions"] })
     qc.invalidateQueries({ queryKey: ["balances"] })
     qc.invalidateQueries({ queryKey: ["summaries"] })
@@ -519,27 +546,18 @@ export function ImportContent() {
                     )}
                   </div>
                   <p className="text-[11px] text-muted-foreground mt-0.5">{row.parsed.date}</p>
-                  {row.parsed.installment && (
-                    <div className="flex items-center gap-1 mt-1">
-                      <span className="text-[10px] text-muted-foreground shrink-0">Plan:</span>
-                      <select
-                        value={row.plan_id}
-                        disabled={!row.selected}
-                        onChange={e => setRowPlan(idx, Number(e.target.value))}
-                        className={cn(
-                          "text-[10px] rounded border bg-background px-1 py-0 focus:outline-none focus:ring-1 focus:ring-primary/50 max-w-[150px]",
-                          row.plan_id > 0 ? "border-emerald-400 text-emerald-700 dark:text-emerald-400" : "border-border text-muted-foreground"
-                        )}
-                      >
-                        <option value={0}>—</option>
-                        {plans.map(p => (
-                          <option key={p.id} value={p.id}>
-                            {p.description} ({p.total_installments} taksit)
-                          </option>
-                        ))}
-                      </select>
-                      {row.plan_id > 0 && (
-                        <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
+                  {row.parsed.installment && !row.parsed.isPayment && frombox > 0 && row.resolved && !row.isDuplicate && (
+                    <div className="flex items-center gap-1 mt-1 text-[10px]">
+                      {row.plan_id > 0 ? (
+                        <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                          <CheckCircle2 className="h-3 w-3 shrink-0" />
+                          Plan: {row.plan_description}
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-sky-600 dark:text-sky-400">
+                          <Layers className="h-3 w-3 shrink-0" />
+                          Yeni taksit planı oluşturulacak · {row.parsed.installment.total - row.parsed.installment.current} taksit kaldı
+                        </span>
                       )}
                     </div>
                   )}
@@ -561,7 +579,8 @@ export function ImportContent() {
                 ) : (
                   <select
                     value={row.tobox}
-                    disabled={!row.selected}
+                    disabled={!row.selected || row.plan_id > 0}
+                    title={row.plan_id > 0 ? "Kategori taksit planından gelir (Plan sayfasından değiştirilebilir)" : undefined}
                     onChange={e => setRowCategory(idx, Number(e.target.value))}
                     className={cn(
                       "w-full rounded-md border text-xs px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/50 bg-background",

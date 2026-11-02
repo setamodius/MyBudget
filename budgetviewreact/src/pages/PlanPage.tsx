@@ -2,7 +2,8 @@ import { useState, useMemo, useEffect } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { getAllBoxes, getBoxes } from "@/api/boxes"
 import { getTransactions, addTransaction, updateTransaction, deleteTransaction } from "@/api/transactions"
-import { getInstallmentPlans, getInstallmentPlanDetail, createInstallmentPlan, deleteInstallmentPlan } from "@/api/installments"
+import { getInstallmentPlans, getInstallmentPlanDetail, createInstallmentPlan, deleteInstallmentPlan, updateInstallmentPlan } from "@/api/installments"
+import { InstallmentRepair } from "@/components/InstallmentRepair"
 import { getAllBoxReport } from "@/api/reports"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -13,7 +14,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { formatCurrency, today } from "@/lib/utils"
-import { CalendarDays, Target, CreditCard, Plus, Trash2, ChevronDown, TrendingUp, LayoutGrid, Printer } from "lucide-react"
+import { CalendarDays, Target, CreditCard, Plus, Trash2, ChevronDown, TrendingUp, LayoutGrid, Printer, Pencil, Wrench, Check } from "lucide-react"
 import { usePrint } from "@/lib/print"
 import type { Box } from "@/types"
 
@@ -366,8 +367,20 @@ function TaksitPlanlari({ boxes }: { boxes: Box[] }) {
   const [showForm, setShowForm] = useState(false)
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; description: string } | null>(null)
+  const [showRepair, setShowRepair] = useState(false)
+  const [editTarget, setEditTarget] = useState<{ id: number; description: string; expense_box_id: string } | null>(null)
+  const [cardTxns, setCardTxns] = useState(false)
   const [form, setForm] = useState({
     description: "", expense_box_id: "", payment_box_id: "", start_date: "", total_installments: "", total_amount: "",
+  })
+
+  const editMutation = useMutation({
+    mutationFn: (t: { id: number; description: string; expense_box_id: number }) =>
+      updateInstallmentPlan(t.id, { description: t.description, expense_box_id: t.expense_box_id }),
+    onSuccess: () => {
+      for (const k of ["installment-plans", "installment-plan-detail", "transactions", "summaries"]) qc.invalidateQueries({ queryKey: [k] })
+      setEditTarget(null)
+    },
   })
 
   const { data: plans = [] } = useQuery({
@@ -428,7 +441,11 @@ function TaksitPlanlari({ boxes }: { boxes: Box[] }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <Button size="sm" variant="outline" onClick={() => setShowRepair(true)}>
+          <Wrench className="h-3.5 w-3.5 mr-1.5" />
+          Taksitleri Tara / Düzelt
+        </Button>
         <Button size="sm" onClick={() => setShowForm(true)}>
           <Plus className="h-3.5 w-3.5 mr-1.5" />
           Yeni Plan
@@ -461,6 +478,13 @@ function TaksitPlanlari({ boxes }: { boxes: Box[] }) {
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 <button
+                  onClick={() => setEditTarget({ id: plan.id, description: plan.description, expense_box_id: String(plan.expense_box_id) })}
+                  className="p-1.5 rounded-lg text-muted-foreground hover:bg-accent transition-colors"
+                  title="Adı / kategoriyi değiştir"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+                <button
                   onClick={() => setExpandedId(isExpanded ? null : plan.id)}
                   className="p-1.5 rounded-lg text-muted-foreground hover:bg-accent transition-colors"
                   title="Ay detayı"
@@ -478,7 +502,10 @@ function TaksitPlanlari({ boxes }: { boxes: Box[] }) {
             </div>
 
             <div className="flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">{elapsed}/{total} taksit geçti</span>
+              <span className="text-muted-foreground">
+                {elapsed}/{total} taksit geçti
+                {plan.first_no > 1 && <span className="ml-1 opacity-70">(takip {plan.first_no}. taksitten)</span>}
+              </span>
               <span className="font-mono font-medium">{formatCurrency(plan.amount_per_month)}<span className="text-muted-foreground font-normal">/ay</span></span>
             </div>
 
@@ -504,6 +531,14 @@ function TaksitPlanlari({ boxes }: { boxes: Box[] }) {
                         {new Date(row.date + "T00:00:00").toLocaleDateString("tr-TR", { month: "long", year: "numeric" })}
                       </span>
                       <div className="flex items-center gap-2">
+                        {row.actual_id ? (
+                          <span className="flex items-center gap-0.5 text-[10px] text-emerald-600 dark:text-emerald-400" title={`Ödeme kaydı: ${row.actual_date}`}>
+                            <Check className="h-3 w-3" /> kayıtlı
+                          </span>
+                        ) : isPast ? (
+                          <span className="text-[10px] text-amber-600">ödeme kaydı yok</span>
+                        ) : null}
+                        {!row.has_budget && <span className="text-[10px] text-amber-600">plan satırı eksik</span>}
                         <span className="font-mono">{formatCurrency(row.amount)}</span>
                         <span className="text-muted-foreground/60">{row.installment_no}/{row.total}</span>
                       </div>
@@ -556,7 +591,7 @@ function TaksitPlanlari({ boxes }: { boxes: Box[] }) {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-xs">İlk Taksit Tarihi</Label>
+                <Label className="text-xs">Alış / İlk Taksit Tarihi</Label>
                 <Input className="mt-1" type="date" value={form.start_date}
                   onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} />
                 {billingInfo && (
@@ -584,6 +619,17 @@ function TaksitPlanlari({ boxes }: { boxes: Box[] }) {
                 </p>
               )}
             </div>
+            {selectedPaymentBox && (
+              <label className="flex items-start gap-2 text-xs">
+                <input type="checkbox" className="h-4 w-4 mt-0.5" checked={cardTxns} onChange={e => setCardTxns(e.target.checked)} />
+                <span>
+                  Aylık ödeme kayıtlarını da oluştur ({selectedPaymentBox.name} → kategori)
+                  <span className="block text-[11px] text-muted-foreground">
+                    Ekstresini içe aktardığın kart için işaretleme; taksitler içe aktarılırken plana otomatik bağlanır.
+                  </span>
+                </span>
+              </label>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowForm(false)}>İptal</Button>
@@ -591,11 +637,63 @@ function TaksitPlanlari({ boxes }: { boxes: Box[] }) {
               description: form.description,
               expense_box_id: parseInt(form.expense_box_id),
               payment_box_id: form.payment_box_id ? parseInt(form.payment_box_id) : null,
-              start_date: form.start_date,
+              purchase_date: form.start_date,
               total_installments: parseInt(form.total_installments),
               total_amount: parseFloat(form.total_amount),
+              auto_link: true,
+              card_txns: cardTxns,
             })} disabled={!formValid || createMutation.isPending}>
               {createMutation.isPending ? "Oluşturuluyor..." : "Oluştur"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showRepair} onOpenChange={setShowRepair}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Taksitleri Tara / Düzelt</DialogTitle>
+            <DialogClose onClose={() => setShowRepair(false)} />
+          </DialogHeader>
+          {showRepair && <InstallmentRepair boxes={boxes} />}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editTarget} onOpenChange={o => !o && setEditTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Planı Düzenle</DialogTitle>
+            <DialogClose onClose={() => setEditTarget(null)} />
+          </DialogHeader>
+          {editTarget && (
+            <div className="space-y-4">
+              <div>
+                <Label className="text-xs">Açıklama</Label>
+                <Input className="mt-1" value={editTarget.description}
+                  onChange={e => setEditTarget(t => t && ({ ...t, description: e.target.value }))} />
+              </div>
+              <div>
+                <Label className="text-xs">Gider Kategorisi</Label>
+                <Select className="mt-1"
+                  options={expenseBoxes.map(b => ({ value: String(b.id), label: b.name }))}
+                  value={editTarget.expense_box_id}
+                  onChange={v => setEditTarget(t => t && ({ ...t, expense_box_id: v }))}
+                />
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Plana bağlı tüm taksit ödemeleri ve bütçe satırları da bu kategoriye taşınır.
+                </p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditTarget(null)}>İptal</Button>
+            <Button
+              disabled={!editTarget?.description || editMutation.isPending}
+              onClick={() => editTarget && editMutation.mutate({
+                id: editTarget.id, description: editTarget.description, expense_box_id: parseInt(editTarget.expense_box_id),
+              })}
+            >
+              {editMutation.isPending ? "Kaydediliyor..." : "Kaydet"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -604,7 +702,7 @@ function TaksitPlanlari({ boxes }: { boxes: Box[] }) {
       <ConfirmDialog
         open={!!deleteTarget}
         title="Planı Sil"
-        description={deleteTarget ? `"${deleteTarget.description}" planı silinecek. Bu işlem geri alınamaz.` : ""}
+        description={deleteTarget ? `"${deleteTarget.description}" planı silinecek. Plan satırları silinir; ekstreden gelen ödeme kayıtları korunur, sadece plan bağlantısı kalkar.` : ""}
         confirmLabel="Sil"
         destructive
         onConfirm={() => { if (deleteTarget) { deleteMutation.mutate(deleteTarget.id); setDeleteTarget(null) } }}

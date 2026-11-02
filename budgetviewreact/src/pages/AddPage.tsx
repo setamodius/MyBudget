@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { getBoxes } from "@/api/boxes"
 import { addTransaction, addIncomeTransaction, getTransactions, updateTransaction } from "@/api/transactions"
-import { getInstallmentPlans } from "@/api/installments"
+import { getInstallmentPlans, createInstallmentPlan } from "@/api/installments"
 import type { Transaction } from "@/types"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -292,14 +292,36 @@ function KartHarcamasiForm({ onClose }: { onClose: () => void }) {
   const [date, setDate]       = useState(today())
   const [desc, setDesc]       = useState("")
   const [error, setError]     = useState("")
+  const [taksit, setTaksit]   = useState("1")
+
+  const installments = Math.max(parseInt(taksit) || 1, 1)
 
   const mut = useMutation({
-    mutationFn: addTransaction,
+    mutationFn: async () => {
+      const description = desc || "Kart Harcaması"
+      if (installments > 1) {
+        // Taksitli: plan + her ay için kart işlemi oluşturulur
+        await createInstallmentPlan({
+          description,
+          merchant: description,
+          expense_box_id: tobox,
+          payment_box_id: frombox,
+          purchase_date: date,
+          total_installments: installments,
+          total_amount: parseFloat(amount),
+          auto_link: true,
+          card_txns: true,
+        })
+      } else {
+        await addTransaction({ date, frombox, tobox, description, amount: parseFloat(amount), info: {} })
+      }
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["transactions"] })
       qc.invalidateQueries({ queryKey: ["balances"] })
       qc.invalidateQueries({ queryKey: ["summaries"] })
       qc.invalidateQueries({ queryKey: ["flows"] })
+      qc.invalidateQueries({ queryKey: ["installment-plans"] })
       onClose()
     },
     onError: (e: Error) => setError(e.message || "Kayıt hatası"),
@@ -310,7 +332,7 @@ function KartHarcamasiForm({ onClose }: { onClose: () => void }) {
   function save() {
     if (!canSave) return
     setError("")
-    mut.mutate({ date, frombox, tobox, description: desc || "Kart Harcaması", amount: parseFloat(amount), info: {} })
+    mut.mutate()
   }
 
   return (
@@ -330,6 +352,37 @@ function KartHarcamasiForm({ onClose }: { onClose: () => void }) {
       <div>
         <Label className="text-xs text-muted-foreground">Harcama Kategorisi *</Label>
         <div className="mt-2"><BoxPills boxes={expenseTypes} value={tobox} onChange={setTobox} /></div>
+      </div>
+      <div>
+        <Label className="text-xs text-muted-foreground">Taksit</Label>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {["1", "2", "3", "4", "6", "9", "12"].map(n => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => setTaksit(n)}
+              className={cn(
+                "px-3 py-1 rounded-full text-sm border transition-all",
+                taksit === n
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "border-border text-muted-foreground hover:border-primary hover:text-foreground"
+              )}
+            >
+              {n === "1" ? "Tek çekim" : n}
+            </button>
+          ))}
+          <Input
+            type="number" min="1" value={taksit}
+            onChange={e => setTaksit(e.target.value)}
+            className="w-20 h-8"
+          />
+        </div>
+        {installments > 1 && parseFloat(amount) > 0 && (
+          <p className="text-xs text-muted-foreground mt-1.5">
+            {installments} × {formatCurrency(Math.round(parseFloat(amount) / installments * 100) / 100)} — taksit planı ve her ayın kart kaydı oluşturulur.
+            Toplam tutarı gir.
+          </p>
+        )}
       </div>
       {error && <p className="text-xs text-red-500">{error}</p>}
       <DialogFooter>
@@ -547,7 +600,7 @@ function TaksitOdeForm({ onClose }: { onClose: () => void }) {
   })
 
   const activePlans = useMemo(
-    () => plans.filter(p => parseInt(p.elapsed_count) < p.total_installments),
+    () => plans.filter(p => (p.first_no ?? 1) + (p.paid_count ?? 0) <= p.total_installments),
     [plans]
   )
 
@@ -573,13 +626,17 @@ function TaksitOdeForm({ onClose }: { onClose: () => void }) {
   function save() {
     if (!selected || !selected.payment_box_id) return
     setError("")
+    const no = Math.min((selected.first_no ?? 1) + (selected.paid_count ?? 0), selected.total_installments)
     mut.mutate({
       date,
       frombox: selected.payment_box_id,
       tobox: selected.expense_box_id,
       description: `${selected.description} taksit`,
       amount: parseFloat(selected.amount_per_month),
-      info: {},
+      info: {
+        plan_id: String(selected.id),
+        installment_no: String(no),
+      },
     })
   }
 
@@ -626,7 +683,7 @@ function TaksitOdeForm({ onClose }: { onClose: () => void }) {
                 </div>
                 <div className="text-right shrink-0 ml-3">
                   <p className="text-sm font-mono font-medium">{formatCurrency(plan.amount_per_month)}</p>
-                  <p className="text-[10px] text-muted-foreground">{plan.elapsed_count}/{plan.total_installments}</p>
+                  <p className="text-[10px] text-muted-foreground">{(plan.first_no ?? 1) - 1 + (plan.paid_count ?? 0)}/{plan.total_installments} ödendi</p>
                 </div>
               </button>
             )

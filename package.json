@@ -1,6 +1,6 @@
 {
   "name": "mybudget",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "scripts": {
     "start": "concurrently --names \"API,UI\" --prefix-colors \"blue,green\" \"npm run serve --prefix budgetapi\" \"npm run dev --prefix budgetviewreact\"",
     "docker:build": "node scripts/docker-build.js"

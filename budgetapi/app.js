@@ -72,10 +72,17 @@ router.get('/flows', dbapi.getFlows);
 
 router.get('/period-summary', dbapi.getPeriodSummary);
 
-router.get('/installment-plans', dbapi.getInstallmentPlans);
-router.get('/installment-plans/:id', dbapi.getInstallmentPlan);
-router.post('/installment-plans', dbapi.createInstallmentPlan);
-router.delete('/installment-plans/:id', dbapi.deleteInstallmentPlan);
+const inst = require('./installments');
+router.get('/installment-plans', inst.getInstallmentPlans);
+router.get('/installment-plans/scan', inst.scanInstallments);
+router.post('/installment-plans/resolve', inst.resolveInstallments);
+router.get('/installment-plans/:id', inst.getInstallmentPlan);
+router.post('/installment-plans', inst.createInstallmentPlan);
+router.put('/installment-plans/:id', inst.updateInstallmentPlan);
+router.delete('/installment-plans/:id', inst.deleteInstallmentPlan);
+router.post('/installment-plans/:id/link', inst.linkToPlan);
+router.post('/installment-plans/:id/fill', inst.fillPlanBudget);
+router.post('/transactions/:id/installmentize', inst.installmentizeTransaction);
 
 app.use('/api/v1', router);
 

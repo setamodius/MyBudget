@@ -128,6 +128,11 @@ const seedDatabase = async () => {
         CONSTRAINT installment_plans_pk PRIMARY KEY ("id")
       );
 
+      ALTER TABLE installment_plans ADD COLUMN IF NOT EXISTS "merchant" varchar;
+      ALTER TABLE installment_plans ADD COLUMN IF NOT EXISTS "purchase_date" date;
+      ALTER TABLE installment_plans ADD COLUMN IF NOT EXISTS "first_no" integer NOT NULL DEFAULT 1;
+      UPDATE installment_plans SET purchase_date = start_date WHERE purchase_date IS NULL;
+
       CREATE TABLE IF NOT EXISTS "box_directions" (
         "id" serial NOT NULL,
         "fromid" integer REFERENCES box_types(id) ON DELETE CASCADE,
@@ -1180,5 +1185,6 @@ module.exports = {
   deleteInstallmentPlan,
   getMonthlyExpenseBreakdown,
   getCreditCardMonthlyTransactions,
-  getPeriodSummary
+  getPeriodSummary,
+  pool
 };

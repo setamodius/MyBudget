@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { updateTransaction, deleteTransaction } from "@/api/transactions"
+import { installmentizeTransaction } from "@/api/installments"
 import { getAllBoxes, getBoxTypes } from "@/api/boxes"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -189,6 +190,79 @@ export function DeleteTransactionDialog({ target, onClose }: DeleteProps) {
             disabled={mut.isPending}
           >
             {mut.isPending ? "Siliniyor..." : "Sil"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Taksitlendir: tek tutar girilmiş harcamayı taksit planına çevir
+// ---------------------------------------------------------------------------
+interface InstallmentizeProps {
+  target: Transaction | null
+  onClose: () => void
+}
+
+export function InstallmentizeDialog({ target, onClose }: InstallmentizeProps) {
+  const qc = useQueryClient()
+  // Her hedef için yeniden mount edilir (key={target.id}); state baştan başlar
+  const [count, setCount] = useState("3")
+  const [cardTxns, setCardTxns] = useState(true)
+
+  const n = parseInt(count) || 0
+  const total = target ? parseFloat(target.amount) : 0
+
+  const mut = useMutation({
+    mutationFn: () => installmentizeTransaction(target!.id, { total_installments: n, card_txns: cardTxns }),
+    onSuccess: () => {
+      for (const k of ["transactions", "balances", "summaries", "flows", "installment-plans"]) {
+        qc.invalidateQueries({ queryKey: [k] })
+      }
+      onClose()
+    },
+  })
+
+  return (
+    <Dialog open={!!target} onOpenChange={o => !o && onClose()}>
+      <DialogContent className="relative max-w-sm">
+        <DialogClose onClose={onClose} />
+        <DialogHeader><DialogTitle>Taksitlendir</DialogTitle></DialogHeader>
+        {target && (
+          <div className="space-y-4">
+            <p className="text-sm">
+              <span className="font-medium">{target.description}</span>
+              <span className="text-muted-foreground"> · {target.date} · {formatCurrency(target.amount)}</span>
+            </p>
+            <div>
+              <Label className="text-xs text-muted-foreground">Taksit sayısı</Label>
+              <Input type="number" min="2" value={count} onChange={e => setCount(e.target.value)} className="mt-1" autoFocus />
+              {n > 1 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {n} × {formatCurrency(Math.round(total / n * 100) / 100)}
+                </p>
+              )}
+            </div>
+            <label className="flex items-start gap-2 text-xs">
+              <input type="checkbox" className="h-4 w-4 mt-0.5" checked={cardTxns} onChange={e => setCardTxns(e.target.checked)} />
+              <span>
+                Her ayın kart kaydını oluştur
+                <span className="block text-[11px] text-muted-foreground">
+                  Ekstreden zaten gelmiş taksitler tekrar oluşturulmaz, plana bağlanır.
+                </span>
+              </span>
+            </label>
+            <p className="text-[11px] text-muted-foreground">
+              Bu tek tutar kaydı silinir; yerine taksit planı oluşturulur.
+            </p>
+            {mut.isError && <p className="text-xs text-destructive">İşlem başarısız: {(mut.error as Error).message}</p>}
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>İptal</Button>
+          <Button onClick={() => mut.mutate()} disabled={n < 2 || mut.isPending}>
+            {mut.isPending ? "Oluşturuluyor..." : "Taksitlendir"}
           </Button>
         </DialogFooter>
       </DialogContent>
