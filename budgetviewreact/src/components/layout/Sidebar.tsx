@@ -2,7 +2,27 @@ import { useEffect, useState } from "react"
 import { NavLink } from "react-router-dom"
 import { Sun, Moon, Wallet } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { NAV_ITEMS } from "./navItems"
+import { NAV_ITEMS, NAV_GROUPS } from "./navItems"
+
+function SideLink({ to, label, icon: Icon, end }: (typeof NAV_ITEMS)[number]) {
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      className={({ isActive }) =>
+        cn(
+          "group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all border-l-2 pl-[10px]",
+          isActive
+            ? "bg-primary/10 text-primary border-primary"
+            : "text-muted-foreground hover:bg-accent/60 hover:text-foreground border-transparent"
+        )
+      }
+    >
+      <Icon className="h-4 w-4 shrink-0" />
+      {label}
+    </NavLink>
+  )
+}
 
 function useTheme() {
   const [isDark, setIsDark] = useState(() =>
@@ -27,28 +47,17 @@ export function Sidebar() {
         <span className="text-base font-semibold">Bütçe</span>
       </div>
 
-      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={end}
-            className={({ isActive }) =>
-              cn(
-                "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
-                isActive
-                  ? "bg-primary/10 text-primary border-l-2 border-primary pl-[10px]"
-                  : "text-muted-foreground hover:bg-accent/60 hover:text-foreground border-l-2 border-transparent pl-[10px]"
-              )
-            }
-          >
-            <Icon className="h-4 w-4 shrink-0" />
-            {label}
-          </NavLink>
+      <nav className="flex-1 px-3 py-4 space-y-5 overflow-y-auto">
+        {NAV_GROUPS.map((group) => (
+          <div key={group} className="space-y-0.5">
+            <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">{group}</p>
+            {NAV_ITEMS.filter((i) => i.group === group).map((item) => <SideLink key={item.to} {...item} />)}
+          </div>
         ))}
       </nav>
 
-      <div className="px-3 py-3 border-t border-border">
+      <div className="px-3 py-3 border-t border-border space-y-0.5">
+        {NAV_ITEMS.filter((i) => i.group === null).map((item) => <SideLink key={item.to} {...item} />)}
         <button
           onClick={toggle}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-accent/60 hover:text-foreground transition-all pl-[10px]"

@@ -24,6 +24,7 @@ type SortDir = "desc" | "asc"
 export function TransactionsPage() {
   const [periodIdx, setPeriodIdx] = useState(0)
   const [search, setSearch]       = useState("")
+  const [showPlans, setShowPlans] = useState(false)
   const [sortKey, setSortKey]     = useState<SortKey>("date")
   const [sortDir, setSortDir]     = useState<SortDir>("desc")
   const [deleteTarget, setDeleteTarget] = useState<Transaction | null>(null)
@@ -59,6 +60,11 @@ export function TransactionsPage() {
         )
       : txRaw
 
+    // Plan satırları (Generator → Gelir, Gider → Destroyer) varsayılan olarak gizli
+    if (!showPlans) {
+      list = list.filter(tx => boxTypeMap.get(tx.frombox) !== 4 && boxTypeMap.get(tx.tobox) !== 5)
+    }
+
     list = [...list].sort((a, b) => {
       if (sortKey === "date") {
         const diff = a.date.localeCompare(b.date)
@@ -70,7 +76,7 @@ export function TransactionsPage() {
     })
 
     return list
-  }, [txRaw, search, sortKey, sortDir, boxMap])
+  }, [txRaw, search, sortKey, sortDir, boxMap, showPlans, boxTypeMap])
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir(d => d === "desc" ? "asc" : "desc")
@@ -107,6 +113,16 @@ export function TransactionsPage() {
               {p.label}
             </button>
           ))}
+          <button
+            onClick={() => setShowPlans(v => !v)}
+            className={`ml-auto px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+              showPlans
+                ? "border-blue-500/40 bg-blue-500/10 text-blue-500"
+                : "border-border text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {showPlans ? "Planlar gösteriliyor" : "Planları göster"}
+          </button>
         </div>
 
         {/* Arama */}

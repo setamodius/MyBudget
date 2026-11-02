@@ -115,12 +115,15 @@ export function StatusPage() {
         color: "text-violet-500",
         txs: recentTx.filter(tx => (ft(6)(tx) && tt(7)(tx)) || (ft(7)(tx) && tt(6)(tx))),
       }] : []),
-    ] as { label: string; value: number; color: string; txs: Transaction[]; billingCycleNote?: boolean }[]
+    ].filter(c => Math.abs(c.value) >= 0.005) as { label: string; value: number; color: string; txs: Transaction[]; billingCycleNote?: boolean }[]
   }, [monthlyFlow, recentTx, boxTypeMap])
 
+  // Plan satırları (Generator → Gelir, Gider → Destroyer) gerçek para hareketi değil; burada gösterilmez
   const sortedTx = useMemo(
-    () => [...recentTx].sort((a, b) => b.id - a.id),
-    [recentTx]
+    () => [...recentTx]
+      .filter(tx => boxTypeMap.get(tx.frombox) !== 4 && boxTypeMap.get(tx.tobox) !== 5)
+      .sort((a, b) => b.id - a.id),
+    [recentTx, boxTypeMap]
   )
   const recentTop = useMemo(
     () => showAll ? sortedTx : sortedTx.slice(0, 15),
@@ -199,12 +202,7 @@ export function StatusPage() {
               <Card className={`border-l-4 ${monthlyFlow.cashBalance >= 0 ? "border-emerald-500" : "border-red-500"}`}>
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Nakit Bakiye (Bu Ayki Değişim)</p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">
-                        {monthlyFlow.externalIncome > 0 ? "Gelir + Harici Gelir − KK Ödemesi − Nakit Gider ± Yatırım" : "Gelir − KK Ödemesi − Nakit Gider ± Yatırım"}
-                      </p>
-                    </div>
+                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Hesaplardaki Değişim</p>
                     <p className={`text-lg font-bold font-mono ${monthlyFlow.cashBalance >= 0 ? "text-emerald-500" : "text-red-500"}`}>
                       {formatCurrency(monthlyFlow.cashBalance)}
                     </p>
@@ -264,7 +262,7 @@ export function StatusPage() {
               <CardContent className="p-0 divide-y divide-border/50">
                 {isLoading ? [...Array(1)].map((_, i) => (
                   <div key={i} className="px-4 py-3"><Skeleton className="h-4" /></div>
-                )) : creditCards.map(cc => {
+                )) : creditCards.filter(cc => Math.abs(parseFloat(cc.balance)) >= 0.005).map(cc => {
                   const debt = parseFloat(cc.balance)
                   return (
                     <div key={cc.id} className="flex items-center justify-between px-4 py-3">

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react"
 import { NavLink, useLocation } from "react-router-dom"
-import { MoreHorizontal } from "lucide-react"
+import { MoreHorizontal, Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { NAV_ITEMS } from "./navItems"
 
@@ -29,7 +29,13 @@ export function BottomNav() {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 flex h-16 items-center justify-around border-t border-border bg-card/95 backdrop-blur-sm lg:hidden print:hidden">
-      {PRIMARY.map(({ to, label, icon: Icon, end }) => (
+      {PRIMARY.map(({ to, label, icon: Icon, end }) => to === "/ekle" ? (
+        <NavLink key={to} to={to} aria-label={label} className="-mt-6 flex flex-col items-center">
+          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg ring-4 ring-background active:scale-95 transition-transform">
+            <Plus className="h-7 w-7" />
+          </span>
+        </NavLink>
+      ) : (
         <NavLink
           key={to}
           to={to}

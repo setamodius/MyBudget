@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn, formatCurrency } from "@/lib/utils"
 import { today } from "@/lib/utils"
-import { TrendingUp, ShoppingCart, CreditCard, ArrowLeftRight, Layers, PiggyBank, Gift, Undo2 } from "lucide-react"
+import { TrendingUp, ShoppingCart, CreditCard, ArrowLeftRight, Layers, PiggyBank, Gift, Undo2, ChevronRight } from "lucide-react"
 import type { Box } from "@/types"
 
 // ---------------------------------------------------------------------------
@@ -933,6 +933,9 @@ const CARDS = [
   },
 ]
 
+// En sık kullanılanlar büyük kart; diğerleri altta liste
+const PRIMARY_TYPES: FormType[] = ["kartharcama", "harcama", "income", "ccpayment"]
+
 const FORM_TITLES: Record<string, string> = {
   income:      "Gelir Ekle",
   harcama:     "Harcama",
@@ -955,9 +958,9 @@ export function AddPage() {
         <p className="text-xs text-muted-foreground mt-0.5">Ne yapmak istiyorsunuz?</p>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-6">
         <div className="grid grid-cols-2 gap-3 max-w-md mx-auto">
-          {CARDS.map(({ type, title, description, icon: Icon, bg, iconColor, border }) => (
+          {CARDS.filter(c => PRIMARY_TYPES.includes(c.type)).map(({ type, title, description, icon: Icon, bg, iconColor, border }) => (
             <button
               key={type}
               onClick={() => setOpen(type)}
@@ -976,6 +979,26 @@ export function AddPage() {
               </div>
             </button>
           ))}
+        </div>
+
+        <div className="max-w-md mx-auto">
+          <p className="px-1 pb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Diğer işlemler</p>
+          <div className="rounded-2xl border border-border divide-y divide-border/60 overflow-hidden">
+            {CARDS.filter(c => !PRIMARY_TYPES.includes(c.type)).map(({ type, title, description, icon: Icon, iconColor }) => (
+              <button
+                key={type}
+                onClick={() => setOpen(type)}
+                className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40 active:bg-muted/60"
+              >
+                <Icon className={cn("h-5 w-5 shrink-0", iconColor)} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">{title}</p>
+                  <p className="text-xs text-muted-foreground truncate">{description}</p>
+                </div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50" />
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
