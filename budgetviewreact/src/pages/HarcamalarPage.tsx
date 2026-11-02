@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query"
 import { getBoxReport, getAllBoxReport, getMonthlyExpenseBreakdown } from "@/api/reports"
 import { getBoxes } from "@/api/boxes"
 import { getTransactions } from "@/api/transactions"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Select } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { formatCurrency, formatMonth } from "@/lib/utils"
@@ -28,15 +27,10 @@ const PIE_COLORS = [
   "#FFD700", "#8B008B", "#00CED1", "#DC143C", "#FF8C00",
 ]
 
-function todayMonth() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
-}
-
 // ---------------------------------------------------------------------------
 // Pasta Grafik — aylık harcama dağılımı
 // ---------------------------------------------------------------------------
-function PastaGrafik({ month }: { month: string }) {
+export function PastaGrafik({ month }: { month: string }) {
   const { data = [], isLoading } = useQuery({
     queryKey: ["expense-breakdown", month],
     queryFn: () => getMonthlyExpenseBreakdown(month),
@@ -120,7 +114,7 @@ function PastaGrafik({ month }: { month: string }) {
 // ---------------------------------------------------------------------------
 const MONTH_SHORT = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"]
 
-function KategoriTrendi() {
+export function KategoriTrendi() {
   const [selectedId, setSelectedId]       = useState("")
   const [expandedYear, setExpandedYear]   = useState<string | null>(null)
   const [expandedMonth, setExpandedMonth] = useState<string | null>(null)
@@ -176,7 +170,11 @@ function KategoriTrendi() {
   const canExpand = !!selectedId
   const boxOptions = [{ value: "", label: "Tümü" }, ...boxes.map(b => ({ value: String(b.id), label: b.name }))]
   const yearOptions = yearlyReports.map(y => ({ value: y.year, label: y.year }))
-  const activeYear = chartYear || yearlyReports[yearlyReports.length - 1]?.year || ""
+  // Varsayılan: içinde bulunulan yıl (ileri tarihli plan satırları sonraki yılı listeye ekleyebilir)
+  const thisYear = String(new Date().getFullYear())
+  const activeYear = chartYear
+    || (yearlyReports.some(y => y.year === thisYear) ? thisYear : yearlyReports[yearlyReports.length - 1]?.year)
+    || ""
 
   const chartData = Array.from({ length: 12 }, (_, i) => {
     const r = activeYear
@@ -352,7 +350,7 @@ function KategoriTrendi() {
 // ---------------------------------------------------------------------------
 // Bütçe Analizi
 // ---------------------------------------------------------------------------
-function ButceAnalizi({ month }: { month: string }) {
+export function ButceAnalizi({ month }: { month: string }) {
   const [y, m] = month.split("-").map(Number)
   const monthStart = `${month}-01`
   const monthEnd   = new Date(y, m, 0).toISOString().split("T")[0]
@@ -505,55 +503,6 @@ function ButceAnalizi({ month }: { month: string }) {
           </div>
         )
       })}
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// HarcamalarPage
-// ---------------------------------------------------------------------------
-export function HarcamalarPage() {
-  const [month, setMonth] = useState(todayMonth)
-  const [tab, setTab] = useState("butce")
-
-  return (
-    <div className="flex flex-col h-full">
-      <div className="px-6 py-5 border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-semibold">Harcamalar</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">Kategori dağılımı ve aylık trendler</p>
-          </div>
-          <input
-            type="month"
-            value={month}
-            onChange={e => setMonth(e.target.value)}
-            className="text-sm font-medium bg-muted/60 border border-border rounded-lg px-3 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
-          />
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-4">
-        <Tabs value={tab} onValueChange={setTab} variant="underline">
-          <TabsList className="mb-5">
-            <TabsTrigger value="butce">Bütçe</TabsTrigger>
-            <TabsTrigger value="dagilim">Dağılım</TabsTrigger>
-            <TabsTrigger value="trend">Trend</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="butce">
-            <ButceAnalizi month={month} />
-          </TabsContent>
-
-          <TabsContent value="dagilim">
-            <PastaGrafik month={month} />
-          </TabsContent>
-
-          <TabsContent value="trend">
-            <KategoriTrendi />
-          </TabsContent>
-        </Tabs>
-      </div>
     </div>
   )
 }

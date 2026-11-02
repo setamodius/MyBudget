@@ -1,7 +1,6 @@
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { getSummaries, getPeriodSummary } from "@/api/reports"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { formatCurrency, formatMonth } from "@/lib/utils"
@@ -9,9 +8,8 @@ import {
   LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts"
-import { FileText, BarChart2, Printer } from "lucide-react"
+import { FileText, BarChart2 } from "lucide-react"
 import type { PeriodSummaryRow } from "@/types"
-import { usePrint } from "@/lib/print"
 
 const TOOLTIP_STYLE = {
   backgroundColor: "hsl(var(--card))",
@@ -38,7 +36,7 @@ function thisMonthRange() {
 // ---------------------------------------------------------------------------
 // Aylık Özet
 // ---------------------------------------------------------------------------
-function AylikOzet() {
+export function AylikOzet() {
   const { data: summaries = [], isLoading, error } = useQuery({
     queryKey: ["summaries"],
     queryFn: getSummaries,
@@ -142,7 +140,7 @@ function AylikOzet() {
 // ---------------------------------------------------------------------------
 // Dönem Özeti
 // ---------------------------------------------------------------------------
-function DonemOzeti() {
+export function DonemOzeti() {
   const [start, setStart] = useState("")
   const [end,   setEnd]   = useState("")
 
@@ -242,51 +240,6 @@ function DonemOzeti() {
           <p className="text-sm">Bu dönem için işlem bulunamadı</p>
         </div>
       )}
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// RaporlarPage
-// ---------------------------------------------------------------------------
-export function RaporlarPage() {
-  const [tab, setTab] = useState("aylik")
-  const { handlePrint } = usePrint()
-
-  return (
-    <div className="flex flex-col h-full">
-      <div className="px-6 py-5 border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-semibold">Raporlar</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">Aylık özet ve dönem bazlı analizler</p>
-          </div>
-          <button
-            onClick={handlePrint}
-            className="print:hidden flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-border hover:bg-muted/50 transition-colors"
-          >
-            <Printer className="h-3.5 w-3.5" />
-            PDF
-          </button>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-4">
-        <Tabs value={tab} onValueChange={setTab} variant="underline">
-          <TabsList className="mb-5 print:hidden">
-            <TabsTrigger value="aylik">Aylık Özet</TabsTrigger>
-            <TabsTrigger value="donem">Dönem Özeti</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="aylik">
-            <AylikOzet />
-          </TabsContent>
-
-          <TabsContent value="donem">
-            <DonemOzeti />
-          </TabsContent>
-        </Tabs>
-      </div>
     </div>
   )
 }

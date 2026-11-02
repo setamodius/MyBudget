@@ -1435,7 +1435,7 @@ export function PlanPage() {
             </TabsTrigger>
             <TabsTrigger value="giderplani">
               <LayoutGrid className="h-3.5 w-3.5 mr-1.5" />
-              Gider Planı
+              Aylık Bütçe
             </TabsTrigger>
             <TabsTrigger value="gelir">
               <CalendarDays className="h-3.5 w-3.5 mr-1.5" />

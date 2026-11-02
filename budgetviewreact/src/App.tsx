@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom"
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { AppLayout } from "@/components/layout/AppLayout"
 import { StatusPage } from "@/pages/StatusPage"
@@ -6,11 +6,9 @@ import { AddPage } from "@/pages/AddPage"
 import { PlanPage } from "@/pages/PlanPage"
 import { DefinitionsPage } from "@/pages/DefinitionsPage"
 import { TransactionsPage } from "@/pages/TransactionsPage"
-import { HarcamalarPage } from "@/pages/HarcamalarPage"
 import { HesaplarPage } from "@/pages/HesaplarPage"
 import { BoxDetailPage } from "@/pages/BoxDetailPage"
-import { RaporlarPage } from "@/pages/RaporlarPage"
-import { FlowPage } from "@/pages/FlowPage"
+import { AnalizPage } from "@/pages/AnalizPage"
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -27,12 +25,14 @@ export default function App() {
             <Route index element={<StatusPage />} />
             <Route path="ekle" element={<AddPage />} />
             <Route path="islemler" element={<TransactionsPage />} />
-            <Route path="harcamalar" element={<HarcamalarPage />} />
             <Route path="hesaplar" element={<HesaplarPage />} />
             <Route path="hesaplar/:id" element={<BoxDetailPage />} />
             <Route path="plan" element={<PlanPage />} />
-            <Route path="raporlar" element={<RaporlarPage />} />
-            <Route path="akis" element={<FlowPage />} />
+            <Route path="analiz" element={<AnalizPage />} />
+            {/* Eski adresler */}
+            <Route path="harcamalar" element={<Navigate to="/analiz?tab=butce" replace />} />
+            <Route path="raporlar" element={<Navigate to="/analiz?tab=raporlar" replace />} />
+            <Route path="akis" element={<Navigate to="/analiz?tab=akis" replace />} />
             <Route path="ayarlar" element={<DefinitionsPage />} />
           </Route>
         </Routes>

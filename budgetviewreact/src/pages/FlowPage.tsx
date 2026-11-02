@@ -35,7 +35,7 @@ function Bar({ value, max, className }: { value: number; max: number; className:
   )
 }
 
-export function FlowPage() {
+export function FlowContent() {
   const [periodIdx, setPeriodIdx] = useState(0)
   const { start, end } = PERIODS[periodIdx].getRange()
 
@@ -106,13 +106,7 @@ export function FlowPage() {
   const hasData = visibleFlows.length > 0
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-6 py-5 border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
-        <h1 className="text-xl font-semibold">Para Akışı</h1>
-        <p className="text-xs text-muted-foreground mt-0.5">Gelirin nereye gittiği</p>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+    <div className="space-y-4">
 
         {/* Dönem seçici */}
         <div className="flex items-center gap-2">
@@ -274,7 +268,6 @@ export function FlowPage() {
           </>
         )}
 
-      </div>
     </div>
   )
 }
